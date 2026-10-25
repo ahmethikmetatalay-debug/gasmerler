@@ -872,7 +872,7 @@ function carve(cx, cy, r) {
   tctx.globalCompositeOperation = 'source-atop';
   tctx.fillStyle = TEMA.oyuk;
   tctx.beginPath(); tctx.arc(cx, cy, r + 6, 0, Math.PI * 2); tctx.fill();
-  tctx.globalCompositeOperation = 'destination-out';
+  tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000';   // silgi tam opak olmalı, yoksa eski arazi soluk kalır
   tctx.beginPath(); tctx.arc(cx, cy, r, 0, Math.PI * 2); tctx.fill();
   tctx.restore();
 }
@@ -1361,7 +1361,7 @@ function buryGoldCrates() {
       carveSolid(x, y, RX, RY);
       tctx.save(); tctx.globalCompositeOperation = 'source-atop'; tctx.fillStyle = TEMA.oyuk;
       tctx.beginPath(); tctx.ellipse(x, y, RX + 6, RY + 6, 0, 0, Math.PI * 2); tctx.fill();
-      tctx.globalCompositeOperation = 'destination-out'; tctx.beginPath(); tctx.ellipse(x, y, RX, RY, 0, 0, Math.PI * 2); tctx.fill(); tctx.restore();
+      tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000'; tctx.beginPath(); tctx.ellipse(x, y, RX, RY, 0, 0, Math.PI * 2); tctx.fill(); tctx.restore();
       out.push({ x, y: y + RY - 1 });   // sandık oyuğun tabanında durur
       break;
     }
