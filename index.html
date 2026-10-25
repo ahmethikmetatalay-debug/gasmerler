@@ -125,6 +125,13 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 .feed div{background:rgba(14,10,20,.55);border-radius:8px;padding:3px 8px;font-size:12px;font-weight:600;line-height:1.3;text-align:right;color:var(--paper);transition:opacity .5s}
 .feed div.fade{opacity:0}
 .feed b{font-weight:800}
+.pad.mic{position:absolute;right:15px;bottom:98px}
+.pad.mic.on,.alt.mic.on{background:#e23b2b;border-color:#ff8a7a}
+.alt.mic{display:flex;align-items:center;justify-content:center;gap:8px;touch-action:none;width:100%}
+.alt.mic svg{width:22px;height:22px;fill:none;stroke:var(--paper);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round}
+.konusan{position:absolute;left:50%;top:calc(max(8px,env(safe-area-inset-top,0px)) + 50px);transform:translateX(-50%);display:flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;background:rgba(14,10,20,.7);font-size:12px;font-weight:700;pointer-events:none;z-index:40;white-space:nowrap}
+.konusan.ust{top:max(4px,env(safe-area-inset-top,0px))}
+.konusan svg{width:14px;height:14px;fill:none;stroke:#ff8a7a;stroke-width:2.6;stroke-linecap:round}
 .rotate{display:none;position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 118px);transform:translateX(-50%);font-size:12px;padding:6px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--line);white-space:nowrap;pointer-events:none}
 @media (orientation:portrait) and (max-width:620px){body.playing .rotate{display:block}}
 
@@ -276,6 +283,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
   <div class="rotate" id="rotateHint">Telefonu yan çevirirsen savaş alanı genişler</div>
 
   <div class="hud bottom" id="hudBottom" hidden>
+    <button class="pad mic" id="bMic" aria-label="Bas konuş: basılı tutarken konuşursun" hidden><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg></button>
     <div class="movebox">
       <div class="fuel" title="Bu turda kalan yürüme hakkı"><i id="fuelFill"></i></div>
       <div class="cluster">
@@ -295,6 +303,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
   <div class="banner" id="banner"></div>
   <div class="chip toast" id="toast"></div>
   <div class="feed" id="feed" aria-live="polite"></div>
+  <div class="konusan" id="konusan" hidden></div>
 
   <div class="overlay" id="menu">
     <div class="card">
@@ -372,6 +381,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
           <span class="flabel">Oyuncular (<span id="pCount">1</span>/6)</span>
           <ul class="plist" id="plist"></ul>
         </div>
+        <button class="alt mic" id="lMic" aria-label="Bas konuş: basılı tutarken konuşursun"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg><span>Bas konuş</span></button>
         </div>
         <div class="lcol lc3">
         <div class="field">
@@ -517,7 +527,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v15-';
+const ID_PREFIX = 'gasmerler-v16-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1092,7 +1102,7 @@ function startGame(opts) {
   turnTeam = (Math.floor(rng() * teams.length) + teams.length - 1) % teams.length;
   buildTeamsPanel();
   $('menu').hidden = true; $('over').hidden = true;
-  $('hudTop').hidden = false; $('hudBottom').hidden = false;
+  $('hudTop').hidden = false; $('hudBottom').hidden = false; $('bMic').hidden = mode === 'local';
   document.body.classList.add('playing');
   overview = false; $('bMap').classList.remove('on');
   cam.x = W / 2; cam.y = H / 2; cam.free = false;
@@ -1934,7 +1944,8 @@ function hostRoom() {
 function openHostPeer() {
   const code = makeCode(), p = new Peer(ID_PREFIX + code);
   peer = p;
-  p.on('open', () => { if (peer !== p) return; roomCode = code; renderLobby(); });
+  p.on('open', () => { if (peer !== p) return; roomCode = code; renderLobby(); telsizListesi(); });
+  p.on('call', c => Telsiz.gelen(c));
   p.on('connection', conn => {
     conn.lastSeen = performance.now();
     conn.on('data', m => { conn.lastSeen = performance.now(); if (peer === p) onHostData(conn, m); });
@@ -1963,6 +1974,7 @@ function onHostData(conn, m) {
       send(conn, { t: 'turn', tt: turnTeam });
       if (state === 'over') send(conn, { t: 'over', w: winnerIdx, st: teams.map(x => [x.dmg, x.ff]) });
       toastAll(back.name + ' geri döndü');
+      telsizListesi();
       return;
     }
     if (inGame) { send(conn, { t: 'full', why: 'Oyun başlamış. Oda sahibi lobiye dönünce katılabilirsin.' }); setTimeout(() => conn.close(), 500); return; }
@@ -1971,9 +1983,10 @@ function onHostData(conn, m) {
     players.push({ name: name || 'Oyuncu ' + (slot + 1), slot, conn, wn: cleanNames(m.wn), side: emptiestSide() });   // yeni gelen en az kişili takıma girer
     players.sort((a, b) => a.slot - b.slot);
     conn.slot = slot;
-    broadcastLobby(); renderLobby();
+    broadcastLobby(); renderLobby(); telsizListesi();
     return;
   }
+  if (m.t === 'tk') { const p = players.find(p => p.conn === conn); if (p) { konusanGoster(p.slot, !!m.on); emit({ t: 'tk', s: p.slot, on: m.on ? 1 : 0 }); } return; }
   if (m.t === 'wn') { const p = players.find(p => p.conn === conn); if (p) p.wn = cleanNames(m.names); return; }
   if (m.t === 'nm' && !inGame) {
     const p = players.find(p => p.conn === conn), n = String(m.name || '').trim().slice(0, 14);
@@ -1995,6 +2008,7 @@ function onPeerLeft(conn) {
   const p = players.find(p => p.conn === conn);
   if (!p) return;
   p.conn = null;
+  konusanGoster(p.slot, false); emit({ t: 'tk', s: p.slot, on: 0 }); telsizListesi();
   if (!inGame) { players = players.filter(x => x !== p); broadcastLobby(); renderLobby(); return; }
   p.gone = true;
   const t = team();
@@ -2044,6 +2058,7 @@ function joinRoom() {
   mode = 'client'; roomCode = code; joined = false;
   $('joinStatus').textContent = 'Bağlanıyor…'; $('joinGo').disabled = true;
   const p = new Peer(); peer = p;
+  p.on('call', c => Telsiz.gelen(c));
   p.on('open', () => {
     if (peer !== p) return;
     const c = p.connect(ID_PREFIX + code, { reliable: true, serialization: 'json' });
@@ -2104,6 +2119,8 @@ function onClientData(m) {
     case 'sf': if (inGame && Sound.has(String(m.n))) Sound.sample(String(m.n), { o: m.o == null ? undefined : +m.o, delay: +m.d || 0, vol: m.v == null ? 1 : +m.v }); break;
     case 'pk': if (inGame) Sound.play('sandik'); break;
     case 'ev': if (inGame) olayGoster(m.p); break;
+    case 'vp': if (Array.isArray(m.l)) Telsiz.listele(m.l.slice(0, MAX_PLAYERS).map(String)); break;
+    case 'tk': konusanGoster(m.s | 0, !!m.on); break;
     case 'as': if (inGame) jetSesi(); break;
     case 'wh': if (inGame) { Sound.sample(m.n === 'kementAt' ? 'kementAt' : 'kirbac') || Sound.play('whip'); buzz(25); } break;
     case 'sh': if (inGame) { bubbles.push({ i: m.i | 0, t: 0 }); Sound.sample('kalkan') || Sound.play('shield'); buzz(40); } break;
@@ -2171,10 +2188,116 @@ function clientTick(dt) {
 
 function teardown() {
   const p = peer;
+  Telsiz.kapat(); konusanlar.clear(); konusanCiz();
   peer = null; hostConn = null; mode = 'local'; inGame = false; players = []; roomCode = ''; mySlot = 0; joined = false;
   clearTimeout(joinTimer); clearInterval(pingTimer);
   if (p) try { p.destroy(); } catch (e) {}
 }
+
+// ---- Telsiz: bas konuş sesli sohbet ----
+// Odadaki herkes herkesle doğrudan ses bağlantısı kurar (PeerJS call; id'si küçük olan arar).
+// Bağlantı önce sessiz bir izle kurulur; mikrofon ilk basışta istenir ve her bağlantıdaki iz mikrofonla değiştirilir.
+// Mikrofon yalnızca düğme basılıyken açıktır. Kimin konuştuğu host üzerinden herkese 'tk' ile duyurulur.
+const Telsiz = (() => {
+  const calls = new Map(), sesler = new Map();   // karşı peer id → arama / <audio>
+  let mic = null, micP = null, sessiz = null, basili = false, liste = [];
+  function sessizIz() {
+    if (!sessiz) { const AC = window.AudioContext || window.webkitAudioContext; sessiz = new AC().createMediaStreamDestination().stream; }
+    return sessiz;
+  }
+  const iz = () => mic || sessizIz();
+  function iziDegistir(call) {
+    const pc = call.peerConnection, tr = mic && mic.getAudioTracks()[0];
+    if (!pc || !tr) return;
+    for (const snd of pc.getSenders()) if (snd.track && snd.track.kind === 'audio' && snd.track !== tr) snd.replaceTrack(tr).catch(() => {});
+  }
+  function sesKapat(id) { const a = sesler.get(id); if (a) { a.srcObject = null; a.remove(); sesler.delete(id); } }
+  function bagla(call) {
+    if (!call) return;
+    const id = call.peer, eski = calls.get(id);
+    if (eski && eski !== call) try { eski.close(); } catch (e) {}
+    calls.set(id, call);
+    call.on('stream', st => {
+      let a = sesler.get(id);
+      if (!a) { a = document.createElement('audio'); a.autoplay = true; a.setAttribute('playsinline', ''); document.body.appendChild(a); sesler.set(id, a); }
+      a.srcObject = st; a.play().catch(() => {});
+      iziDegistir(call);
+    });
+    const bit = () => { if (calls.get(id) === call) { calls.delete(id); sesKapat(id); } };
+    call.on('close', bit); call.on('error', bit);
+    iziDegistir(call);
+  }
+  function gelen(call) {
+    if (mode === 'local') { try { call.close(); } catch (e) {} return; }
+    try { call.answer(iz()); bagla(call); } catch (e) {}
+  }
+  // l: odadaki herkesin peer id'si (kendisi dahil)
+  function listele(l) {
+    liste = l;
+    if (!peer || !peer.id) return;
+    for (const id of l) if (id !== peer.id && id > peer.id && !calls.has(id)) try { bagla(peer.call(id, iz())); } catch (e) {}
+    for (const [id, c] of calls) if (!l.includes(id)) { try { c.close(); } catch (e) {} calls.delete(id); sesKapat(id); }
+  }
+  function micAc() {
+    if (mic) return Promise.resolve(mic);
+    if (!micP) micP = navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+      .then(st => { mic = st; st.getAudioTracks()[0].enabled = basili; for (const c of calls.values()) iziDegistir(c); return st; })
+      .catch(e => { micP = null; throw e; });
+    return micP;
+  }
+  function bas() {
+    if (basili || mode === 'local') return;
+    basili = true; dugmeler(true); haberVer(true);
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { toast('Bu tarayıcı mikrofonu desteklemiyor'); birak(); return; }
+    micAc().then(st => { st.getAudioTracks()[0].enabled = basili; })
+      .catch(() => { toast('Mikrofon izni verilmedi. Tarayıcı ayarlarından izin ver.'); birak(); });
+  }
+  function birak() {
+    if (!basili) return;
+    basili = false; dugmeler(false); haberVer(false);
+    if (mic) mic.getAudioTracks()[0].enabled = false;
+  }
+  function dugmeler(on) { for (const id of ['bMic', 'lMic']) $(id).classList.toggle('on', on); }
+  function haberVer(on) {
+    if (mode === 'host') { konusanGoster(mySlot, on); emit({ t: 'tk', s: mySlot, on: on ? 1 : 0 }); }
+    else if (mode === 'client') send(hostConn, { t: 'tk', on: on ? 1 : 0 });
+  }
+  function kapat() {
+    birak();
+    for (const c of calls.values()) try { c.close(); } catch (e) {}
+    calls.clear(); for (const id of [...sesler.keys()]) sesKapat(id);
+    if (mic) { for (const tr of mic.getTracks()) tr.stop(); mic = null; micP = null; }   // odadan çıkınca mikrofon tamamen kapanır
+    liste = [];
+  }
+  return { gelen, listele, bas, birak, kapat, get baglanti() { return calls.size; }, get basili() { return basili; } };
+})();
+function telsizListesi() {
+  if (mode !== 'host' || !peer || !peer.id) return;
+  const l = [peer.id, ...players.filter(p => p.conn && p.conn.open && !p.gone).map(p => p.conn.peer)];
+  emit({ t: 'vp', l }); Telsiz.listele(l);
+}
+// Konuşanlar: slot → bitiş zamanı (kopan birinin 'bıraktı' mesajı gelmezse 25 sn sonra silinir)
+const konusanlar = new Map();
+function konusanGoster(slot, on) { if (on) konusanlar.set(slot, performance.now() + 25000); else konusanlar.delete(slot); konusanCiz(); }
+function konusanCiz() {
+  const el = $('konusan'), now = performance.now();
+  for (const [s, t] of konusanlar) if (t < now) konusanlar.delete(s);
+  const adlar = [...konusanlar.keys()].map(s => { const p = players.find(p => p.slot === s); return s === mySlot ? 'Sen' : p ? p.name : '?'; });
+  el.hidden = !adlar.length; el.classList.toggle('ust', !$('menu').hidden);   // lobide kartın üstünde dursun
+  if (adlar.length) el.innerHTML = '<svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>';
+  if (adlar.length) el.append(adlar.join(', ') + ' konuşuyor');
+}
+setInterval(() => { if (konusanlar.size) konusanCiz(); }, 2000);
+for (const id of ['bMic', 'lMic']) {
+  const b = $(id);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); try { b.setPointerCapture(e.pointerId); } catch (er) {} Telsiz.bas(); });
+  for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) b.addEventListener(ev, () => Telsiz.birak());
+  b.addEventListener('contextmenu', e => e.preventDefault());
+}
+// Bilgisayarda V tuşu basılı tutulunca konuşur
+addEventListener('keydown', e => { if (e.code === 'KeyV' && !e.repeat && e.target.tagName !== 'INPUT') Telsiz.bas(); });
+addEventListener('keyup', e => { if (e.code === 'KeyV') Telsiz.birak(); });
+addEventListener('blur', () => Telsiz.birak());
 
 // Kapanan sayfanın bağlantısı bazen geç düşer: client'tan 7 sn ses gelmezse kopmuş say
 setInterval(() => {
@@ -3723,7 +3846,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get state() { return state; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
-  Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
+  Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
   spawnCrate, surfaceY, setTimer(v) { timer = v; },
 };
 
