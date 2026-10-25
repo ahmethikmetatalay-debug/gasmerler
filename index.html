@@ -121,6 +121,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 .itr{position:relative;display:inline-block}.itr::after{content:"";position:absolute;left:50%;top:-.1em;width:.2em;height:.2em;border-radius:50%;background:currentColor;transform:translateX(-50%);box-shadow:0 3px 0 rgba(0,0,0,.35)}
 .toast{position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 70px);transform:translateX(-50%);max-width:calc(100% - 32px);padding:8px 14px;border-radius:999px;font-size:13px;font-weight:600;text-align:center;pointer-events:none;opacity:0;transition:opacity .25s;z-index:5}
 .toast.show{opacity:1}
+.feed{position:absolute;right:max(10px,env(safe-area-inset-right,0px));top:calc(max(8px,env(safe-area-inset-top,0px)) + 52px);display:flex;flex-direction:column;align-items:flex-end;gap:3px;max-width:min(58%,340px);pointer-events:none;z-index:4}
+.feed div{background:rgba(14,10,20,.55);border-radius:8px;padding:3px 8px;font-size:12px;font-weight:600;line-height:1.3;text-align:right;color:var(--paper);transition:opacity .5s}
+.feed div.fade{opacity:0}
+.feed b{font-weight:800}
 .rotate{display:none;position:absolute;left:50%;top:calc(env(safe-area-inset-top,0px) + 118px);transform:translateX(-50%);font-size:12px;padding:6px 12px;border-radius:999px;background:var(--glass);border:1px solid var(--line);white-space:nowrap;pointer-events:none}
 @media (orientation:portrait) and (max-width:620px){body.playing .rotate{display:block}}
 
@@ -290,6 +294,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
   <div class="chip weapons" id="weaponMenu" hidden></div>
   <div class="banner" id="banner"></div>
   <div class="chip toast" id="toast"></div>
+  <div class="feed" id="feed" aria-live="polite"></div>
 
   <div class="overlay" id="menu">
     <div class="card">
@@ -512,7 +517,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v14-';
+const ID_PREFIX = 'gasmerler-v15-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -941,7 +946,7 @@ function airStep(b, dt, onImpact) {
 
 function fallDamage(u, speed) {
   if (!u.isUnit || speed < 520) return;
-  hurt(u, Math.min(40, Math.round((speed - 520) / 7)));
+  hasarSebebi = 'dusme'; hurt(u, Math.min(40, Math.round((speed - 520) / 7))); hasarSebebi = null;
 }
 
 // ---- Portallar: her asker kendi çiftini (A/B) açar; biri giriş, diğeri çıkış ----
@@ -1058,6 +1063,7 @@ function startGame(opts) {
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
   teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0;
+  turSay = 0; olaySil();
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
   elektrikKur();
@@ -1097,6 +1103,7 @@ function startGame(opts) {
 }
 
 function nextTurn() {
+  turSay++;
   const aliveSides = [...new Set(teams.filter(t => t.units.some(u => u.alive)).map(t => t.side))];
   if (aliveSides.length <= 1) { gameOver(aliveSides.length ? aliveSides[0] : -1); return; }
   // Dost ateşi cezası olan oyuncu bir sırasını atlar
@@ -1225,6 +1232,7 @@ function hurt(u, dmg, linked) {
   // Kalkan ilk hasarı tamamen yutar, 2 sn mavi küre olarak görünüp kaybolur
   if (u.shield) { u.shield = false; u.vx = 0; u.vy = 0; shieldFx(u); addPop(u.x, u.y - 52, 'Kalkan!', '#8fd3ff'); return true; }
   credit(u, Math.min(dmg, u.hp));
+  vuranYaz(u);
   u.hp = Math.max(0, u.hp - dmg);
   addPop(u.x, u.y - 52, '-' + dmg, u.team.c);
   if (!acikSus && performance.now() - acikT > 250) { acikT = performance.now(); sfx('acik', { delay: 0.1 }); }   // acik.mp3'teki ah/uh'lardan biri, patlamanın hemen ardından
@@ -1245,13 +1253,58 @@ function drown(u) {
   u.alive = false; u.hp = 0; closePortalsOf(u);
   splash(u.x, WATER);
   addPop(u.x, WATER - 30, 'Boğuldu', '#9fd4ff');
+  olumOlayi(u, true);
 }
 
 function kill(u) {
   u.alive = false; closePortalsOf(u);
   graves.push({ x: u.x, y: u.y, c: u.team.c, ti: teams.indexOf(u.team) });
+  olumOlayi(u, false);
   explode(u.x, u.y - 8, 24, 14);
 }
+
+// ---- Olay akışı: sağ üstte kısa satırlar (kim hangi sandığı aldı, kim kimi öldürdü) ----
+// Satır parçaları: düz metin ya da { t, c } (renkli, kalın). Host üretir, misafirlere 'ev' ile gider.
+let turSay = 0, hasarSebebi = null;
+const OLAY_SURE = 6000, OLAY_MAX = 4;
+function vuranYaz(u) {
+  // Düşme hasarı, bu tur onu biri vurduysa vuranı silmez (fırlatan öldürmüş sayılır)
+  if (hasarSebebi === 'dusme' && u.vuranTur === turSay && u.vuran) return;
+  u.vuran = hasarSebebi || active; u.vuranTur = turSay;
+}
+function kim(u) { return { t: u.team.name + ' ' + u.name, c: u.team.c }; }
+// Belirtme hâli eki, özel isim kesmesiyle: Kömür'ü, Pırasa'yı, Semih'i
+function belirtme(ad) {
+  const k = ad.toLocaleLowerCase('tr'), S = 'aeıioöuü';
+  let v = 'e';
+  for (let i = k.length - 1; i >= 0; i--) if (S.includes(k[i])) { v = k[i]; break; }
+  return ad + "'" + (S.includes(k[k.length - 1]) ? 'y' : '') + { a: 'ı', ı: 'ı', e: 'i', i: 'i', o: 'u', u: 'u', ö: 'ü', ü: 'ü' }[v];
+}
+function olumOlayi(u, bogul) {
+  const v = u.vuranTur === turSay ? u.vuran : null, o = kim(u);
+  let p;
+  if (v === 'elektrik') p = [o, ' elektrik çarpıp öldü'];
+  else if (v === 'dusme') p = [o, ' düşüp öldü'];
+  else if (v && v === u) p = [o, bogul ? ' kendini suya attı' : ' kendini havaya uçurdu'];
+  else if (v && v.team) {
+    const ad = { t: belirtme(o.t), c: o.c };
+    p = v.team.side === u.team.side ? [kim(v), ' dost ateşiyle ', ad, bogul ? ' boğdu' : ' öldürdü'] : [kim(v), ' ', ad, bogul ? ' boğdu' : ' öldürdü'];
+  } else p = [o, bogul ? ' boğuldu' : ' öldü'];
+  olay(p);
+}
+function olay(p) { olayGoster(p); emit({ t: 'ev', p }); }
+function olayGoster(p) {
+  const box = $('feed'), row = document.createElement('div');
+  for (const x of Array.isArray(p) ? p.slice(0, 8) : []) {
+    if (x && typeof x === 'object') { const b = document.createElement('b'); b.textContent = String(x.t).slice(0, 40); b.style.color = String(x.c); row.appendChild(b); }
+    else row.appendChild(document.createTextNode(String(x).slice(0, 60)));
+  }
+  box.appendChild(row);
+  while (box.children.length > OLAY_MAX) box.firstChild.remove();
+  setTimeout(() => row.classList.add('fade'), OLAY_SURE);
+  setTimeout(() => row.remove(), OLAY_SURE + 600);
+}
+function olaySil() { $('feed').textContent = ''; }
 
 // ---- Sandıklar ----
 // Gömülü altın sandık: toprağın derinlerinde, etrafı tamamen toprakla çevrili iki oyuk açılır.
@@ -1280,7 +1333,8 @@ function elektrikKontrol() {
       e.cd = ELEKTRIK_BEKLE;
       const u = active, i = units.indexOf(u);
       elektrikFx(e.x, e.y, i); emit({ t: 'el', x: r1(e.x), y: r1(e.y), i });
-      if (!hurt(u, ELEKTRIK_DMG)) { u.vy = -170; u.vx = -u.facing * 70; u.grounded = false; }
+      hasarSebebi = 'elektrik'; const yuttu = hurt(u, ELEKTRIK_DMG); hasarSebebi = null;
+      if (!yuttu) { u.vy = -170; u.vx = -u.facing * 70; u.grounded = false; }
     }
     e.ic = ic;
   }
@@ -1427,6 +1481,7 @@ function collect(c, u) {
     addPop(u.x, u.y - 52, 'HELE İKİ GÖZÜM!', '#ffcb3d');
     const msg = u.team.name + ' altın sandığı buldu!';
     showBanner(msg, '#ffcb3d'); emit({ t: 'bn', text: msg, c: '#ffcb3d', s: 'altin' });
+    olay([kim(u), ' altın sandıktan ', { t: 'Hele İki Gözüm', c: '#ffcb3d' }, ' aldı']);
     Sound.sample('altin') || Sound.play('pickup'); return;
   }
   let r = rng() * 100, kind = 'hp';
@@ -1434,22 +1489,24 @@ function collect(c, u) {
   const a = u.team.ammo, y = u.y - 52;
   if (kind === 'trap') {
     addPop(u.x, y, 'TUZAK!', '#ff4d5e');
+    olay([kim(u), ' tuzaklı sandığa dokundu']);
     explode(c.x, c.y - 9, 30, 25);
     return;
   }
-  if (kind === 'hp') { u.hp += Math.max(0, Math.min(35, 150 - u.hp)); addPop(u.x, y, '+35 can', '#8fe36b'); }
-  else if (kind === 'weapon') { const k = CRATE_WEAPONS[Math.floor(rng() * CRATE_WEAPONS.length)]; if (a[k] >= 0) a[k]++; addPop(u.x, y, '+1 ' + WEAPONS[k].name, '#ffcb3d'); }
-  else if (kind === 'shovel') { a[WI('shovel')] += 5; addPop(u.x, y, '+5 Kürek', '#e9d3a8'); }   // tek sandık 5 turluk kazma hakkı
-  else if (kind === 'shield') { u.shield = true; addPop(u.x, y, 'Kalkan', '#8fd3ff'); }
-  else if (kind === 'lasso') { a[WI('lasso')]++; addPop(u.x, y, '+1 Kement', '#e9d3a8'); }
+  if (kind === 'hp') { u.hp += Math.max(0, Math.min(35, 150 - u.hp)); addPop(u.x, y, '+35 can', '#8fe36b'); olay([kim(u), ' ', { t: '+35 can', c: '#8fe36b' }, ' aldı']); }
+  else if (kind === 'weapon') { const k = CRATE_WEAPONS[Math.floor(rng() * CRATE_WEAPONS.length)]; if (a[k] >= 0) a[k]++; addPop(u.x, y, '+1 ' + WEAPONS[k].name, '#ffcb3d'); olay([kim(u), ' ', { t: WEAPONS[k].name, c: '#ffcb3d' }, ' aldı']); }
+  else if (kind === 'shovel') { a[WI('shovel')] += 5; addPop(u.x, y, '+5 Kürek', '#e9d3a8'); olay([kim(u), ' ', { t: '5 Kürek', c: '#e9d3a8' }, ' aldı']); }   // tek sandık 5 turluk kazma hakkı
+  else if (kind === 'shield') { u.shield = true; addPop(u.x, y, 'Kalkan', '#8fd3ff'); olay([kim(u), ' ', { t: 'Kalkan', c: '#8fd3ff' }, ' aldı']); }
+  else if (kind === 'lasso') { a[WI('lasso')]++; addPop(u.x, y, '+1 Kement', '#e9d3a8'); olay([kim(u), ' ', { t: 'Kement', c: '#e9d3a8' }, ' aldı']); }
   else {
     const mates = u.team.units.filter(o => o.alive);
     if (mates.length > 1) {
       for (const o of mates) o.link = true; addPop(u.x, y, 'LİNK!', '#ff4d5e');
+      olay([kim(u), ' ', { t: 'Link', c: '#ff4d5e' }, ' aldı: askerleri birbirine bağlandı']);
       const msg = 'LİNK! ' + u.team.name + ' askerleri aynı hasarı alacak';
       showBanner(msg, '#ff4d5e'); emit({ t: 'bn', text: msg, c: '#ff4d5e', s: 'traitor' }); Sound.play('traitor'); buzz(120);   // hain olunca çalan ses
     }
-    else addPop(u.x, y, 'Link (etkisiz)', '#ff4d5e');
+    else { addPop(u.x, y, 'Link (etkisiz)', '#ff4d5e'); olay([kim(u), ' ', { t: 'Link', c: '#ff4d5e' }, ' aldı (etkisiz)']); }
   }
   Sound.play('sandik'); emit({ t: 'pk' });
 }
@@ -2058,6 +2115,7 @@ function onClientData(m) {
     case 'fi': if (inGame) atesSesi(String(m.w)); break;
     case 'sf': if (inGame && Sound.has(String(m.n))) Sound.sample(String(m.n), { o: m.o == null ? undefined : +m.o, delay: +m.d || 0, vol: m.v == null ? 1 : +m.v }); break;
     case 'pk': if (inGame) Sound.play('sandik'); break;
+    case 'ev': if (inGame) olayGoster(m.p); break;
     case 'as': if (inGame) jetSesi(); break;
     case 'wh': if (inGame) { Sound.sample(m.n === 'kementAt' ? 'kementAt' : 'kirbac') || Sound.play('whip'); buzz(25); } break;
     case 'sh': if (inGame) { bubbles.push({ i: m.i | 0, t: 0 }); Sound.sample('kalkan') || Sound.play('shield'); buzz(40); } break;
