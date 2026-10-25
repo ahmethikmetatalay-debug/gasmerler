@@ -1309,32 +1309,39 @@ function olaySil() { $('feed').textContent = ''; }
 // ---- Sandıklar ----
 // Gömülü altın sandık: toprağın derinlerinde, etrafı tamamen toprakla çevrili iki oyuk açılır.
 // Haritanın tohumundan üretilir, böylece her telefonda aynı yerdedir. İçindeki sandık "Hele İki Gözüm" verir.
-// ---- Hurda Gezegeni: topraktan çıkan elektrik ----
-// Haritada az sayıda sabit noktada kablo kaçağı var. Yalnızca sırası gelen asker o noktanın üstünden YÜRÜRKEN,
-// noktaya girdiği anda ELEKTRIK_SANS ihtimalle çarpar (5 hasar, ufak sıçrama); sonra nokta ELEKTRIK_BEKLE sn dinlenir.
-// Duran, sırası olmayan ya da havadan geçen asker çarpılmaz. Kararı host verir, görüntü/ses herkese gider.
-const ELEKTRIK_YER = [[650, 295], [1250, 440], [950, 628], [1400, 695]];   // elle seçildi (ayna öncesi)
-const ELEKTRIK_DMG = 5, ELEKTRIK_SANS = 0.45, ELEKTRIK_BEKLE = 9;
+// ---- Hurda Gezegeni: topraktan çıkan elektrik (bubi tuzağı) ----
+// Zeminde GİZLİ kablo kaçakları var: yerleri her maçta rastgele, ekranda hiçbir iz yok. Yalnızca sırası gelen
+// asker bir kaçağın üstünden YÜRÜRKEN, oraya girdiği anda ELEKTRIK_SANS ihtimalle çarpar (5 hasar, ufak sıçrama).
+// Çarpan kaçak başka rastgele bir yere taşınır; patlamayla toprağı giden kaçak da taşınır. Böylece yeri öğrenilemez.
+// Yerleri yalnızca host bilir (Math.random), çarpma anının görüntüsü/sesi herkese gider.
+const ELEKTRIK_SAYI = 5, ELEKTRIK_DMG = 5, ELEKTRIK_SANS = 0.45;
 let elektrik = [], zaplar = [];
+function elektrikYeri() {
+  for (let k = 0; k < 200; k++) {
+    const x = 60 + Math.random() * (W - 120), fl = floorsAt(x).filter(y => y < WATER - 30 && !altinRafi(x, y));
+    if (!fl.length) continue;
+    const y = fl[(Math.random() * fl.length) | 0];
+    if (elektrik.some(e => Math.abs(e.x - x) < 120 && Math.abs(e.y - y) < 60)) continue;   // kaçaklar birbirine yapışmasın
+    return { x, y, ic: false };
+  }
+  return null;
+}
+function elektrikTasi(e) { const n = elektrikYeri(); if (n) Object.assign(e, n); else e.ic = false; }
 function elektrikKur() {
   elektrik = []; zaplar = [];
   if (aktifHarita !== 'hurda') return;
-  for (const [x0, y0] of ELEKTRIK_YER) {
-    const x = hx(x0), fl = floorsAt(x);
-    if (!fl.length) continue;
-    const y = fl.reduce((b, v) => Math.abs(v - y0) < Math.abs(b - y0) ? v : b);
-    elektrik.push({ x, y, cd: 0, ic: false });
-  }
+  for (let k = 0; k < ELEKTRIK_SAYI; k++) { const e = elektrikYeri(); if (e) elektrik.push(e); }
 }
 function elektrikKontrol() {
   for (const e of elektrik) {
+    if (!isSolid(e.x, e.y + 2)) { elektrikTasi(e); continue; }   // toprağı patlamayla gitti
     const ic = Math.abs(active.x - e.x) < 15 && Math.abs(active.y - e.y) < 16;
-    if (ic && !e.ic && e.cd <= 0 && Math.random() < ELEKTRIK_SANS) {
-      e.cd = ELEKTRIK_BEKLE;
+    if (ic && !e.ic && Math.random() < ELEKTRIK_SANS) {
       const u = active, i = units.indexOf(u);
       elektrikFx(e.x, e.y, i); emit({ t: 'el', x: r1(e.x), y: r1(e.y), i });
       hasarSebebi = 'elektrik'; const yuttu = hurt(u, ELEKTRIK_DMG); hasarSebebi = null;
       if (!yuttu) { u.vy = -170; u.vx = -u.facing * 70; u.grounded = false; }
+      elektrikTasi(e); continue;
     }
     e.ic = ic;
   }
@@ -1351,24 +1358,6 @@ function simsek(x0, y0, x1, y1, sap) {
   const n = 7;
   for (let k = 1; k < n; k++) { const f = k / n; ctx.lineTo(x0 + (x1 - x0) * f + (Math.random() - 0.5) * sap, y0 + (y1 - y0) * f + (Math.random() - 0.5) * sap * 0.4); }
   ctx.lineTo(x1, y1); ctx.stroke();
-}
-function drawElektrik(t) {
-  if (!elektrik.length) return;
-  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-  for (const e of elektrik) {
-    if (!isSolid(e.x, e.y + 2)) continue;   // nokta patlamayla yok olduysa çizme
-    // Yerde hafif mavi sızıntı: oyuncu noktayı öğrenebilsin
-    const nab = 0.5 + 0.5 * Math.sin(t * 3 + e.x);
-    ctx.fillStyle = `rgba(120,220,255,${0.22 + nab * 0.2})`;
-    ctx.beginPath(); ctx.ellipse(e.x, e.y + 1, 13, 3.5, 0, 0, Math.PI * 2); ctx.fill();
-    // Arada bir kısa kıvılcım
-    if (Math.sin(t * 11 + e.x * 0.37) * Math.sin(t * 6.7 + e.y) > 0.82) {
-      ctx.shadowColor = '#7fe0ff'; ctx.shadowBlur = 6; ctx.strokeStyle = 'rgba(220,250,255,.95)'; ctx.lineWidth = 1.2;
-      for (let k = 0; k < 2; k++) { const dx = (Math.random() - 0.5) * 14; simsek(e.x + dx * 0.3, e.y, e.x + dx, e.y - 7 - Math.random() * 7, 4); }
-      ctx.shadowBlur = 0;
-    }
-  }
-  ctx.restore();
 }
 // Çarpılma anı: askerlerin ÖNÜNE çizilir; yerden çıkan 4 kol askerin gövdesini sarar
 function drawZaplar() {
@@ -1822,7 +1811,6 @@ function stepGoat(g) {
 
 // ---- Ana simülasyon adımı (sabit 60 Hz, sadece local ve host'ta) ----
 function step() {
-  for (const e of elektrik) if (e.cd > 0) e.cd -= DT;
   if (state === 'menu' || state === 'over' || state === 'wait') return;
   if (state === 'aim') {
     timer -= DT;
@@ -3007,7 +2995,6 @@ function render(t) {
   const z = cam.z;
   ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (vw / 2 - cam.x * z + sxo), dpr * (vh / 2 - cam.y * z + syo));
   ctx.drawImage(terr, 0, 0, W, H);
-  drawElektrik(t);
   for (const P of portals) drawPortal(P, t);
   drawAirTarget(t);
   for (const g of graves) {
