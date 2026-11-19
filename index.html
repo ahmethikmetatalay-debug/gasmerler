@@ -1808,7 +1808,7 @@ function stepCrates() {
 }
 // Sandık içeriği: iyi (can, özel silah, kalkan, kürek) ya da kötü (tuzak bomba, link)
 // Ağırlıklar doğrudan yüzde (toplam 100). En nadir eşya düdük
-const CRATE_LOOT = [['hp', 16.5], ['weapon', 19], ['shield', 9], ['shovel', 7.5], ['trap', 7.5], ['link', 7.5], ['jet', 6.6], ['tape', 6.6], ['revive', 5], ['bos', 5], ['lasso', 5], ['whistle', 4.8]];
+const CRATE_LOOT = [['hp', 14.5], ['weapon', 17], ['shield', 9], ['bos', 9], ['shovel', 7.5], ['trap', 7.5], ['link', 7.5], ['jet', 6.6], ['tape', 6.6], ['revive', 5], ['lasso', 5], ['whistle', 4.8]];
 const LOOT_TOPLAM = CRATE_LOOT.reduce((s, [, w]) => s + w, 0);
 let zorlaLoot = null, kokular = [];
 function kokuFx(x, y) { kokular.push({ x, y, t: 0 }); Sound.sample('fart'); }
