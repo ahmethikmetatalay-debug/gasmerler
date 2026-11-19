@@ -1163,7 +1163,7 @@ function startGame(opts) {
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
   teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; kokular = []; kapanlar = [];
-  turSay = 0; olaySil(); imkansizTur = -1; atanU = null;
+  turSay = 0; olaySil(); imkansizTur = -1; atanU = null; sakinTur = 0; hasarVar = false; asitDurum = null; cizirtilar = [];
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
   elektrikKur();
@@ -1202,11 +1202,70 @@ function startGame(opts) {
   else nextTurn();
 }
 
+// ---- Asit Yağmuru: üç tur üst üste kimse hasar almazsa bir tur uyarı (hafif yağmur), sonra 2 sn yoğun yağış ----
+// Yağış gökyüzüne açık toprağı eritir (sivri tepeler yumuşar) ve açıkta duran askerlere 5-10 hasar verir.
+const ASIT_SAKIN = 3, ASIT_SURE = 2, ASIT_ERI = 6, ASIT_TEPE_MAX = 24;
+let sakinTur = 0, hasarVar = false, asitDurum = null, asitT = 0, cizirtilar = [];
+function asitEritHesapla() {
+  const top = new Int32Array(W), out = [];
+  for (let x = 0; x < W; x++) { let y = 0; while (y < WATER && !solid[y * W + x]) y++; top[x] = y; }
+  for (let x = 0; x < W; x++) {
+    if (top[x] >= WATER - 2) continue;
+    let sum = 0, n = 0;
+    for (let k = -7; k <= 7; k++) { const xx = x + k; if (xx >= 0 && xx < W && top[xx] < WATER - 2) { sum += top[xx]; n++; } }
+    const ort = sum / n;   // 15 px kayan ortalama: üstünde kalan kısım (sivri tepe) da erir
+    const y1 = Math.max(top[x] + ASIT_ERI, Math.min(Math.floor(ort), top[x] + ASIT_ERI + ASIT_TEPE_MAX));
+    let y = top[x];
+    while (y < y1 && y < WATER - 2 && solid[y * W + x]) y++;   // yalnız gökyüzüne açık ilk toprak katmanı
+    if (y > top[x]) out.push(x, top[x], y - top[x]);
+  }
+  return out;
+}
+// d: [x, y, boy, x, y, boy, ...] silinecek dikey şeritler. Host ve misafir aynı aralıkları siler.
+function asitUygula(d) {
+  if (!Array.isArray(d) || !terr) return;
+  tctx.save(); tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000';
+  for (let i = 0; i + 2 < d.length; i += 3) {
+    const x = d[i] | 0, y = d[i + 1] | 0, n = d[i + 2] | 0;
+    if (x < 0 || x >= W || n <= 0) continue;
+    for (let yy = Math.max(0, y); yy < Math.min(H, y + n); yy++) solid[yy * W + x] = 0;
+    tctx.fillRect(x - 0.02, y, 1.04, n);
+  }
+  tctx.globalCompositeOperation = 'source-atop'; tctx.fillStyle = TEMA.oyuk;   // erimiş yüzey: ince koyu çizgi
+  for (let i = 0; i + 2 < d.length; i += 3) tctx.fillRect((d[i] | 0) - 0.02, (d[i + 1] | 0) + (d[i + 2] | 0), 1.04, 2);
+  tctx.restore();
+}
+function gokAcik(u) { for (let y = Math.floor(u.y - UNIT_H - 2); y >= 0; y--) if (araziKati(u.x, y)) return false; return true; }
+function asitYagdir() {
+  state = 'asit'; asitT = ASIT_SURE; asitDurum = 'yagis'; shotThisTurn = false; camHold = null;
+  const d = asitEritHesapla();
+  asitUygula(d); carveLog.push(['a', d]); emit({ t: 'ac', d });
+  const yanan = [];
+  for (const u of units) {
+    if (!u.alive || !gokAcik(u)) continue;
+    hasarSebebi = 'asit'; const yuttu = hurt(u, 5 + Math.floor(rng() * 6)); hasarSebebi = null;
+    if (!yuttu) { u.yanik = 2; yanan.push(units.indexOf(u)); }
+  }
+  emit({ t: 'ay', i: yanan });
+  showBanner('ASİT YAĞMURU!', '#b6e83a'); Sound.play('asit'); buzz(100);
+  emit({ t: 'bn', text: 'ASİT YAĞMURU!', c: '#b6e83a', s: 'asit' });
+}
+function asitAdim() {
+  asitT -= DT;
+  if (asitT > 0) return;
+  asitDurum = null; sakinTur = -1;   // sonraki tur sayımı 0'dan başlasın
+  state = 'settle'; settleT = 0; settleAll = 0;
+}
+function asitSiddet() { return asitDurum === 'uyari' ? 0.25 : asitDurum === 'yagis' || state === 'asit' ? 1 : 0; }
+
 function turKapat() { for (const t of teams) { t.best = Math.max(t.best, t.turDmg); t.turDmg = 0; } }
 function nextTurn() {
   turSay++; turKapat();
   const aliveSides = [...new Set(teams.filter(t => t.units.some(u => u.alive)).map(t => t.side))];
   if (aliveSides.length <= 1) { gameOver(aliveSides.length ? aliveSides[0] : -1); return; }
+  if (turSay > 1) sakinTur = hasarVar ? 0 : sakinTur + 1;
+  hasarVar = false;
+  if (asitDurum === 'uyari') { asitYagdir(); return; }   // uyarı turu bitti: yağış, sonra sıra devam eder
   // Dost ateşi cezası olan oyuncu bir sırasını atlar
   const skipped = [];
   if (gameMode === 'team') pickTeamTurn(skipped);
@@ -1236,6 +1295,10 @@ function nextTurn() {
   if (crates.length < 3 && rng() < 0.4) spawnCrate();
   emit({ t: 'turn', tt: turnTeam });
   announceTurn();
+  if (sakinTur >= ASIT_SAKIN && !asitDurum) {
+    asitDurum = 'uyari';
+    setTimeout(() => { if (asitDurum === 'uyari' && state === 'aim') { showBanner('ASİT YAĞMURU GELİYOR!', '#b6e83a'); emit({ t: 'bn', text: 'ASİT YAĞMURU GELİYOR!', c: '#b6e83a' }); } }, 1700);
+  }
 }
 
 // Takım modu: sıra takımlar arasında döner (Kızıl → Mavi → Yeşil), takım içinde oyuncular sırayla oynar.
@@ -1380,7 +1443,7 @@ function hurt(u, dmg, linked) {
   // Kalkan ilk hasarı tamamen yutar, 2 sn mavi küre olarak görünüp kaybolur
   if (u.shield) { u.shield = false; u.vx = 0; u.vy = 0; shieldFx(u); addPop(u.x, u.y - 52, 'Kalkan!', '#8fd3ff'); return true; }
   credit(u, Math.min(dmg, u.hp));
-  vuranYaz(u);
+  vuranYaz(u); hasarVar = true;
   u.hp = Math.max(0, u.hp - dmg);
   addPop(u.x, u.y - 52, '-' + dmg, u.team.c);
   if (!acikSus && performance.now() - acikT > 250) { acikT = performance.now(); sfx('acik', { delay: 0.1 }); }   // acik.mp3'teki ah/uh'lardan biri, patlamanın hemen ardından
@@ -1397,7 +1460,7 @@ const BUBBLE_T = 2;
 function shieldFx(u) { const i = units.indexOf(u); bubbles.push({ i, t: 0 }); Sound.sample('kalkan') || Sound.play('shield'); buzz(40); emit({ t: 'sh', i }); }
 
 function drown(u) {
-  credit(u, u.hp);
+  credit(u, u.hp); hasarVar = true;
   u.alive = false; u.hp = 0; closePortalsOf(u);
   splash(u.x, WATER);
   addPop(u.x, WATER - 30, 'Boğuldu', '#9fd4ff');
@@ -2102,6 +2165,7 @@ function stepGoat(g) {
 // ---- Ana simülasyon adımı (sabit 60 Hz, sadece local ve host'ta) ----
 function step() {
   if (state === 'menu' || state === 'over' || state === 'wait') return;
+  if (state === 'asit') asitAdim();
   if (state === 'aim') {
     timer -= DT;
     if (timer <= 0) { timer = 0; endTurn(); }
@@ -2346,6 +2410,7 @@ function snapshot() {
     dl: digLeft, dg: digging ? 1 : 0, jt: [jetKul ? 1 : 0, r2(jetYakit), jetItki ? 1 : 0], at: airTarget ? [r1(airTarget.x), r1(airTarget.y)] : 0, sw: shotThisTurn ? 1 : 0,
     p: projs.map(p => [p.id, p.type, r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.fuse !== undefined ? r2(p.fuse) : -1, p.type === 'pshot' ? p.slot : (p.dir || 0), p.grounded ? 1 : 0]),
     g: graves.map(g => [r1(g.x), r1(g.y), g.ti, g.hp, g.ui]),
+    ad: asitDurum === 'uyari' ? 1 : asitDurum === 'yagis' ? 2 : 0,
     ka: kapanlar.map(k => [r1(k.x), r1(k.y), k.sahip, k.kapali ? 1 : 0]),
     c: crates.map(c => [c.id, r1(c.x), r1(c.y), c.k, c.para ? 1 : 0]),
     po: portals.map(P => [r1(P.x), r1(P.y), r2(P.nx), r2(P.ny), P.o, P.s]),
@@ -2413,7 +2478,7 @@ function onClientData(m) {
       if (!Array.isArray(m.teams)) break;
       inGame = true; lastSnapN = 0;
       if (m.you !== undefined) mySlot = m.you | 0;
-      haritaIleBaslat(m, () => { for (const c of Array.isArray(m.carves) ? m.carves : []) carve(+c[0], +c[1], +c[2]); });
+      haritaIleBaslat(m, () => { for (const c of Array.isArray(m.carves) ? m.carves : []) { if (c[0] === 'a') asitUygula(c[1]); else carve(+c[0], +c[1], +c[2]); } });
       break;
     case 's': if (inGame && teams.length && state !== 'menu') { if (m.n && m.n <= lastSnapN) break; lastSnapN = m.n | 0; applySnap(m); } break;
     case 'turn': if (!teams.length) break; turnTeam = m.tt | 0; closeWeaponMenu(); announceTurn(); break;
@@ -2423,6 +2488,8 @@ function onClientData(m) {
     case 'fi': if (inGame) atesSesi(String(m.w)); break;
     case 'sf': if (inGame && Sound.has(String(m.n))) Sound.sample(String(m.n), { o: m.o == null ? undefined : +m.o, delay: +m.d || 0, vol: m.v == null ? 1 : +m.v }); break;
     case 'pk': if (inGame) Sound.play('sandik'); break;
+    case 'ac': if (inGame && terr) asitUygula(m.d); break;
+    case 'ay': if (inGame && Array.isArray(m.i)) for (const i of m.i) if (units[i | 0]) units[i | 0].yanik = 2; break;
     case 'ps': if (inGame && YAYIN_SES.has(m.n)) Sound.play(m.n); break;
     case 'mk': if (inGame) mezarKirFx(+m.x, +m.y); break;
     case 'kb': if (inGame) kokuFx(+m.x, +m.y); break;
@@ -2479,6 +2546,7 @@ function applySnap(s) {
   });
   graves = (s.g || []).slice(0, 64).map(a => ({ x: +a[0], y: +a[1], c: (teams[a[2]] || TEAM_COLORS[0]).c, hp: a[3] | 0, ui: a[4] | 0 }));
   crates = (s.c || []).map(a => ({ id: a[0], x: a[1], y: a[2], k: a[3], para: !!a[4] }));
+  asitDurum = s.ad === 1 ? 'uyari' : s.ad === 2 ? 'yagis' : null;
   kapanlar = (s.ka || []).slice(0, 40).map(a => ({ x: +a[0], y: +a[1], sahip: a[2] | 0, kapali: !!a[3] }));
   portals = (s.po || []).slice(0, 40).map(a => ({ x: a[0], y: a[1], nx: a[2], ny: a[3], o: a[4] | 0, s: a[5] ? 1 : 0 }));
   lastSnapAt = now; warnedStale = false;
@@ -3775,11 +3843,14 @@ function render(t) {
     ctx.save(); ctx.translate(x, y); OBJE.kalkan(ctx, R, b.t, a); ctx.restore();
   }
   drawParticles();
+  for (const c of cizirtilar) YENI.asitCizirti(ctx, c.x, c.y, c.t / 0.6);
+  for (const u of units) if (u.alive && u.yanik > 0) { ctx.save(); ctx.translate(u.x, u.y - 34); YENI.asitYanik(ctx, t); ctx.restore(); }
   const [wx0] = toWorld(-40, 0), [wx1] = toWorld(vw + 40, 0);
   drawWater(t, Math.floor(wx0 / 12) * 12, wx1);
 
   // Ekran-uzayı etiketler: zum ne olursa olsun okunur kalsın
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  const sd = asitSiddet(); if (sd > 0) { ctx.save(); YENI.asitYagmuru(ctx, vw, vh, t, sd, wind * 10); ctx.restore(); }
   ctx.textAlign = 'center'; ctx.lineJoin = 'round';
   for (const u of units) {
     if (!u.alive) continue;
@@ -3845,6 +3916,13 @@ function updateFx(dt) {
     jetSesT -= dt; if (jetSesT <= 0) { jetSesT = 0.12; Sound.play('jet'); }
   }
   kokular = kokular.filter(k => k.t < 1.2);
+  if (asitSiddet() >= 1 && terr) for (let i = 0; i < 3; i++) {
+    const { vw } = viewSize(), x = cam.x + (Math.random() - 0.5) * vw / cam.z, y = surfaceY(x);
+    if (y !== null && y < WATER) cizirtilar.push({ x, y, t: 0 });
+  }
+  for (const c of cizirtilar) c.t += dt;
+  cizirtilar = cizirtilar.filter(c => c.t < 0.6);
+  for (const u of units) if (u.yanik > 0) u.yanik -= dt;
   bubbles = bubbles.filter(b => b.t < BUBBLE_T);
   for (const u of units) if (u.punchT > 0) u.punchT = Math.max(0, u.punchT - dt);
   shake *= 0.85; if (shake < 0.2) shake = 0;
@@ -4569,7 +4647,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, bantla,
+  spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
