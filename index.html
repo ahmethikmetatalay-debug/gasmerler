@@ -598,7 +598,7 @@ let moveLeft = MOVE_MAX, portalPending = 0, portalReturn = false, ffTurn = 0, ga
 let digLeft = DIG_MAX, digging = false, digAcc = 0, digMark = 0, bubbles = [];
 let airTarget = null, shotThisTurn = false, settleAll = 0, camHold = null;
 const cam = { x: W / 2, y: H / 2, z: 1, user: 1, free: false };
-const input = { left: false, right: false, up: false, down: false, charging: false, power: 0 };
+const input = { left: false, right: false, up: false, down: false, charging: false, power: 0, jet: false };
 const config = { teams: 2, size: 3, harita: 'plastik', names: TEAM_COLORS.map(t => t.name) };
 
 // ---- Ağ durumu ----
@@ -1157,7 +1157,7 @@ function startGame(opts) {
   genTerrain();
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
-  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; kokular = [];
+  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; kokular = []; kapanlar = [];
   turSay = 0; olaySil(); imkansizTur = -1; atanU = null;
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
@@ -1222,10 +1222,10 @@ function nextTurn() {
   if (t.ammo[t.weapon] === 0) t.weapon = 0;
   wind = Math.round((rng() * 2 - 1) * 10) / 10;
   timer = TURN_TIME; state = 'aim'; walkAcc = 0; moveLeft = MOVE_MAX; portalPending = 0; portalReturn = false; ffTurn = 0;
-  digLeft = DIG_MAX; digging = false; digAcc = 0;
+  digLeft = DIG_MAX; digging = false; digAcc = 0; jetKul = false; jetItki = false; jetYakit = 0; jetHavada = false;
   shotThisTurn = false; airTarget = null;
   input.charging = false; input.power = 0;
-  input.left = input.right = input.up = input.down = false;
+  input.left = input.right = input.up = input.down = input.jet = false;
   for (const u of units) u.tpCount = 0;
   cam.free = false;
   if (crates.length < 3 && rng() < 0.4) spawnCrate();
@@ -1261,7 +1261,7 @@ function announceTurn() {
   if (mine) { buzz(180); Sound.sample('sira') || Sound.play('turn'); }
 }
 
-function endTurn() { state = 'settle'; settleT = 0; settleAll = 0; input.charging = false; input.power = 0; portalPending = 0; portalReturn = false; closeWeaponMenu(); }
+function endTurn() { if (jetKul) jetBitir(); state = 'settle'; settleT = 0; settleAll = 0; input.charging = false; input.power = 0; portalPending = 0; portalReturn = false; closeWeaponMenu(); }
 
 // side: kazanan taraf (herkes tek modunda kazanan oyuncunun sırası), -1 berabere
 function gameOver(side) {
@@ -1411,6 +1411,42 @@ function kill(u) {
   graves.push(g);
 }
 const MEZAR_HP = 40;
+// ---- Ayı Kapanı: herkese görünür. Yerde yürüyerek ya da yere düşerek üstüne giren yakalanır (10 hasar, sırası biter) ----
+const KAPAN_DMG = 10, KAPAN_MAX = 2, KAPAN_GOSTER = 1.5;
+let kapanlar = [];
+function kapanKur(u, t) {
+  if (kapanlar.filter(k => k.sahip === teams.indexOf(t) && !k.kapali).length >= KAPAN_MAX) { uyari('En fazla 2 kapan kurabilirsin'); return false; }
+  const x = u.x + u.facing * 18;
+  let y = null;
+  for (let yy = u.y - 12; yy <= u.y + 26; yy++) if (!isSolid(x, yy) && araziKati(x, yy + 1)) { y = yy; break; }
+  if (y === null || y > WATER - 4) { uyari('Buraya kapan kurulamaz'); return false; }
+  // Kurulduğu an üstünde duran yakalanmaz: önce çıkıp tekrar girmeli
+  const ic = new Set(units.filter(o => o.alive && Math.abs(o.x - x) <= 8 && Math.abs(o.y - y) < 14).map(o => units.indexOf(o)));
+  kapanlar.push({ x, y, sahip: teams.indexOf(t), kapali: false, t: 0, ic });
+  sesYay('kapanKur');
+  return true;
+}
+function kapanAdim() {
+  for (const k of kapanlar) {
+    if (k.kapali) { k.t -= DT; const u = units[k.ui]; if (u && u.alive) { k.x = u.x; k.y = u.y; } continue; }
+    if (!araziKati(k.x, k.y + 1) && !araziKati(k.x - 6, k.y + 1) && !araziKati(k.x + 6, k.y + 1)) { k.y += 2; if (k.y > WATER) k.t = -1, k.kapali = true; continue; }
+    const simdi = new Set();
+    for (let i = 0; i < units.length; i++) {
+      const u = units[i];
+      if (!u.alive || !u.grounded || Math.abs(u.x - k.x) > 8 || Math.abs(u.y - k.y) > 14) continue;
+      simdi.add(i);
+      if (k.ic.has(i) || k.kapali) continue;
+      k.kapali = true; k.t = KAPAN_GOSTER; k.ui = i;
+      sesYay('kapan'); buzz(80); shake = Math.min(12, shake + 3);
+      u.vx = 0; u.vy = 0;
+      hasarSebebi = 'kapan'; hurt(u, KAPAN_DMG); hasarSebebi = null;
+      olay([kim(u), ' ', { t: 'ayı kapanına', c: '#a3a8b0' }, ' yakalandı']);
+      if (u === active && state === 'aim') endTurn();
+    }
+    k.ic = simdi;
+  }
+  if (kapanlar.some(k => k.kapali && k.t <= 0)) kapanlar = kapanlar.filter(k => !(k.kapali && k.t <= 0));
+}
 // ---- Diriltme: kendi tarafının ölmüş askerini mezarının dibinde akü ve maşalı kabloyla geri getirir ----
 const DIRILT_HP = 30, DIRILT_SURE = 0.6;
 function diriltmeHedefi(u) {
@@ -1474,6 +1510,8 @@ function olumOlayi(u, bogul) {
   let p;
   if (v === 'elektrik') p = [o, ' elektrik çarpıp öldü'];
   else if (v === 'dusme') p = [o, ' düşüp öldü'];
+  else if (v === 'kapan') p = [o, ' ayı kapanında can verdi'];
+  else if (v === 'asit') p = [o, ' asit yağmurunda eridi'];
   else if (v && v === u) p = [o, bogul ? ' kendini suya attı' : ' kendini havaya uçurdu'];
   else if (v && v.team) {
     const ad = { t: belirtme(o.t), c: o.c };
@@ -1714,6 +1752,11 @@ function fire(power) {
   if (w === 'punch') { doPunch(power); shotThisTurn = true; state = 'fly'; input.charging = false; input.power = 0; cam.free = false; return; }
   const dx = Math.cos(u.aim) * u.facing, dy = Math.sin(u.aim);
   const sx = u.x + dx * 24, sy = u.y - AIM_Y + dy * 24, sp = 120 + power * 880;
+  if (w === 'beartrap') {
+    if (!kapanKur(u, t) && t.ammo[wi] >= 0) t.ammo[wi]++;
+    if (t.ammo[wi] === 0) t.weapon = 0;
+    input.charging = false; input.power = 0; return;   // kapan turu bitirmez, ardından atış yapılabilir
+  }
   if (w === 'revive') {
     const g = diriltmeHedefi(u);
     if (!g) { if (t.ammo[wi] >= 0) t.ammo[wi]++; return; }
@@ -1901,6 +1944,7 @@ function explode(x, y, r, dmg, kb = 1, ses, kaynak) {
   }
   atanU = onceki;
   if (graves.length) mezarHasar(x, y, r, dmg);
+  if (kapanlar.length) kapanlar = kapanlar.filter(k => k.kapali || Math.hypot(k.x - x, k.y - y) > r + 4);
   for (const p of projs) if (p.resting) p.resting = false;
   // Patlamaya yakalanan sürpriz sandık da patlar; gömülü altın sandık hiçbir şeyden etkilenmez
   const chain = crates.filter(c => !c.dead && c.k !== 1 && Math.hypot(c.x - x, c.y - 9 - y) < r + 8);
@@ -2065,6 +2109,7 @@ function step() {
         }
       }
       if (input.charging) { input.power = Math.min(1, input.power + DT / 1.3); if (input.power >= 1) fire(1); }
+      if (jetKul && state === 'aim') jetAdim();
     }
   }
   for (const u of units) {
@@ -2078,6 +2123,7 @@ function step() {
   for (let i = 0; i < projs.length; i++) stepProjectile(projs[i]);
   projs = projs.filter(p => !p.dead);
   stepCrates();
+  if (kapanlar.length) kapanAdim();
   // Mezar: altı boşalırsa düşer (kendisini katı saymaz), suya düşerse kaybolur
   for (const g of graves) if (!mezarIci(g.x, g.y + 1, g) && !araziKati(g.x, g.y + 1) && !araziKati(g.x - 9, g.y + 1) && !araziKati(g.x + 9, g.y + 1)) { g.y += 2; if (g.y > WATER + 4) { g.dead = true; splash(g.x, WATER); } }
   if (graves.some(g => g.dead)) graves = graves.filter(g => !g.dead);
@@ -2281,9 +2327,10 @@ function snapshot() {
     ch: input.charging ? 1 : 0, pw: r2(input.power), ml: moveLeft, pp: portalPending,
     wp: teams.map(t => t.weapon), am: teams.map(t => t.ammo),
     u: units.map(u => [r1(u.x), r1(u.y), u.hp, u.alive ? 1 : 0, u.facing, r2(u.aim), u.traitor ? 1 : 0, u.link ? 1 : 0]),
-    dl: digLeft, dg: digging ? 1 : 0, at: airTarget ? [r1(airTarget.x), r1(airTarget.y)] : 0, sw: shotThisTurn ? 1 : 0,
+    dl: digLeft, dg: digging ? 1 : 0, jt: [jetKul ? 1 : 0, r2(jetYakit), jetItki ? 1 : 0], at: airTarget ? [r1(airTarget.x), r1(airTarget.y)] : 0, sw: shotThisTurn ? 1 : 0,
     p: projs.map(p => [p.id, p.type, r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.fuse !== undefined ? r2(p.fuse) : -1, p.type === 'pshot' ? p.slot : (p.dir || 0), p.grounded ? 1 : 0]),
     g: graves.map(g => [r1(g.x), r1(g.y), g.ti, g.hp, g.ui]),
+    ka: kapanlar.map(k => [r1(k.x), r1(k.y), k.sahip, k.kapali ? 1 : 0]),
     c: crates.map(c => [c.id, r1(c.x), r1(c.y), c.k, c.para ? 1 : 0]),
     po: portals.map(P => [r1(P.x), r1(P.y), r2(P.nx), r2(P.ny), P.o, P.s]),
   };
@@ -2392,6 +2439,7 @@ function applySnap(s) {
   if (state === 'over') return;
   state = s.st; turnTeam = s.tt | 0; active = units[s.ai] || null;
   digLeft = +s.dl || 0; digging = !!s.dg; shotThisTurn = !!s.sw;
+  if (Array.isArray(s.jt)) { jetKul = !!s.jt[0]; jetYakit = +s.jt[1] || 0; jetItki = !!s.jt[2]; }
   // Hedefi kendisi işaretleyen oyuncunun ekranında, hostun bir önceki değeri hedefi geri çekmesin
   if (performance.now() >= aimHoldUntil || !myTurn()) airTarget = Array.isArray(s.at) ? { x: +s.at[0], y: +s.at[1] } : null;
   timer = +s.tm; wind = +s.w; input.charging = !!s.ch; input.power = +s.pw; moveLeft = +s.ml || 0; portalPending = s.pp | 0;
@@ -2415,6 +2463,7 @@ function applySnap(s) {
   });
   graves = (s.g || []).slice(0, 64).map(a => ({ x: +a[0], y: +a[1], c: (teams[a[2]] || TEAM_COLORS[0]).c, hp: a[3] | 0, ui: a[4] | 0 }));
   crates = (s.c || []).map(a => ({ id: a[0], x: a[1], y: a[2], k: a[3], para: !!a[4] }));
+  kapanlar = (s.ka || []).slice(0, 40).map(a => ({ x: +a[0], y: +a[1], sahip: a[2] | 0, kapali: !!a[3] }));
   portals = (s.po || []).slice(0, 40).map(a => ({ x: a[0], y: a[1], nx: a[2], ny: a[3], o: a[4] | 0, s: a[5] ? 1 : 0 }));
   lastSnapAt = now; warnedStale = false;
 }
@@ -2619,6 +2668,7 @@ function applyAct(m) {
     case 'fp': firePress(); break;
     case 'fr': fireRelease(); break;
     case 'j': jump(); break;
+    case 'ju': input.jet = false; break;
     case 'w': selectWeapon(m.i | 0); break;
     case 'tg':   // Hele İki Gözüm hedefi
       if (state === 'aim' && team() && WEAPONS[team().weapon].id === 'airstrike' && Number.isFinite(m.x) && Number.isFinite(m.y))
@@ -3502,6 +3552,11 @@ function drawUnit(u, isActive, t) {
   if (u.link) linkHare(gop, t);   // link kötü bir şey: karakterin şeklini izleyen, aradan boşluklu kırmızı hare
   GASMER.draw(ctx, gop);
   silah();
+  // Sprey Jet sırtta: seçiliyken ya da uçarken. Ölçüler dünya pikseli, yerel ölçekten geri çevrilir
+  if (isActive && (jetKul || (aiming && wid === 'jet'))) {
+    ctx.save(); ctx.scale(f, 1); ctx.translate(-11 / UNIT_SCALE, -17 / UNIT_SCALE); ctx.scale(0.66 / UNIT_SCALE, 0.66 / UNIT_SCALE);
+    YENI.spreyJet(ctx, t, jetItki ? 1 : 0, jetKul ? jetYakit / JET_YAKIT : undefined); ctx.restore();
+  }
   ctx.restore();
   if (aiming && wid !== 'airstrike') {   // hava desteğinde nişangâh yerine haritadaki hedef işareti görünür
     const rd = wid === 'punch' ? PUNCH_REACH + 8 : 80;
@@ -3677,10 +3732,12 @@ function render(t) {
   for (const P of portals) drawPortal(P, t);
   drawAirTarget(t);
   for (const g of graves) { ctx.save(); ctx.translate(g.x, g.y); YENI.mezar(ctx, g.c, g.hp < 20); ctx.restore(); }
+  for (const k of kapanlar) if (!k.kapali) { ctx.save(); ctx.translate(k.x, k.y + 1); YENI.ayiKapani(ctx, false); ctx.restore(); }
   for (const c of crates) drawCrate(c, t);
   for (const k of kokular) { ctx.save(); ctx.translate(k.x, k.y); YENI.kokuBulutu(ctx, k.t / 1.2); ctx.restore(); }
   for (const u of units) if (u.alive && u !== active) drawUnit(u, false, t);
   if (active && active.alive) drawUnit(active, true, t);
+  for (const k of kapanlar) if (k.kapali) { ctx.save(); ctx.translate(k.x, k.y + 1); YENI.ayiKapani(ctx, true); ctx.restore(); }
   drawZaplar();
   for (const p of projs) drawProjectile(p, t);
   // Kalkan hasarı yuttuğu an beliren mavi küre
@@ -3756,6 +3813,11 @@ function updateFx(dt) {
   pops = pops.filter(p => p.t < 1.6);
   for (const b of bubbles) b.t += dt;
   for (const k of kokular) k.t += dt;
+  if (jetItki && active && active.alive) {
+    const f = active.facing, bx = active.x - f * 10, by = active.y - 10;
+    for (let i = 0; i < 2; i++) parts.push({ kind: 'spark', c: YENI.SPREY_RENK[i] + '0.8)', x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 40, g: -20, size: 2 + Math.random() * 2.5, life: 0.22, max: 0.22 });
+    jetSesT -= dt; if (jetSesT <= 0) { jetSesT = 0.12; Sound.play('jet'); }
+  }
   kokular = kokular.filter(k => k.t < 1.2);
   bubbles = bubbles.filter(b => b.t < BUBBLE_T);
   for (const u of units) if (u.punchT > 0) u.punchT = Math.max(0, u.punchT - dt);
@@ -3815,7 +3877,7 @@ function updateHud() {
   // Kürek seçiliyken çubuk kalan kazma hakkını gösterir, oklar kazar
   const shov = WEAPONS[t.weapon].id === 'shovel', canDig = digging ? digLeft > 0 : t.ammo[t.weapon] > 0;
   hb.classList.toggle('nofuel', shov ? !canDig : moveLeft <= 0);
-  hb.classList.toggle('nojump', moveLeft < JUMP_COST);
+  hb.classList.toggle('nojump', WEAPONS[t.weapon].id === 'jet' ? false : moveLeft < JUMP_COST);
   hb.classList.toggle('digmode', shov);
   $('fuelFill').style.width = (state === 'aim' ? (shov ? (canDig ? digLeft / DIG_MAX : 0) : moveLeft / MOVE_MAX) * 100 : 0) + '%';
   const tm = $('timer');
@@ -3890,6 +3952,8 @@ function firePress() {
   if (wid === 'shovel') { if (!digging) return; endDig(t); return firePress(); }
   if (t.ammo[t.weapon] === 0 && !(wid === 'portal' && portalPending)) { t.weapon = 0; return; }
   if (wid === 'revive' && !diriltmeHedefi(active)) { uyari('Mezara yaklaş'); return; }
+  if (wid === 'jet') { uyari('Uçmak için zıpla tuşunu basılı tut'); return; }
+  if (jetKul) return;   // havadayken ateş yok, önce in
   if (ANINDA.has(wid)) { fire(0); return; }   // güç doldurmadan hemen ateşlenir
   input.charging = true; input.power = 0;
 }
@@ -3901,7 +3965,36 @@ function uyari(text) {
   toast(text);
 }
 function fireRelease() { if (input.charging && state === 'aim') fire(input.power); }
+// ---- Sprey Jet: zıpla tuşu basılıyken itki, sağ/sol ile yön. Bir kullanım 3 sn yakıt; yere inince ya da yakıt bitince biter ----
+const JET_YAKIT = 3, JET_ITKI = 1.6, JET_VY = 220, JET_VX = 140, JET_AX = 420;
+let jetKul = false, jetYakit = 0, jetHavada = false, jetItki = false, jetSesT = 0;
+function jetBas() {
+  if (state !== 'aim' || !active || !active.alive || input.charging) return;
+  const t = team(), wi = WI('jet');
+  if (!jetKul) {
+    if (t.ammo[wi] === 0) return;
+    if (t.ammo[wi] > 0) t.ammo[wi]--;
+    jetKul = true; jetYakit = JET_YAKIT; jetHavada = false;
+  }
+  input.jet = true;
+}
+function jetAdim() {
+  const u = active;
+  jetItki = input.jet && jetYakit > 0;
+  if (jetItki) { jetYakit = Math.max(0, jetYakit - DT); u.grounded = false; u.vy = Math.max(-JET_VY, u.vy - G * JET_ITKI * DT); }
+  if (!u.grounded) {
+    jetHavada = true;
+    const d = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+    if (d) { u.facing = d; u.vx = clamp((u.vx || 0) + d * JET_AX * DT, -JET_VX, JET_VX); }
+  } else if (jetHavada) jetBitir();
+}
+function jetBitir() {
+  jetKul = false; jetItki = false; input.jet = false; jetHavada = false;
+  const t = team(); if (!t) return;
+  if (WEAPONS[t.weapon].id === 'jet') t.weapon = t.prevW !== undefined && t.ammo[t.prevW] !== 0 && !['jet', 'shovel'].includes(WEAPONS[t.prevW].id) ? t.prevW : 0;
+}
 function jump() {
+  if (team() && WEAPONS[team().weapon].id === 'jet') { jetBas(); return; }
   if (state !== 'aim' || !active || !active.grounded || input.charging || moveLeft < JUMP_COST) return;
   moveLeft -= JUMP_COST;
   active.vy = -330; active.vx = active.facing * 130; active.grounded = false;
@@ -3915,7 +4008,8 @@ function selectWeapon(i) {
   if (state !== 'aim' || input.charging || i < 0 || i >= WEAPONS.length) return;
   const t = team();
   if (weaponLocked(t, i)) return;
-  if (WEAPONS[i].id === 'shovel' && WEAPONS[t.weapon].id !== 'shovel') t.prevW = t.weapon;
+  if (['shovel', 'jet'].includes(WEAPONS[i].id) && !['shovel', 'jet'].includes(WEAPONS[t.weapon].id)) t.prevW = t.weapon;
+  if (jetKul && WEAPONS[i].id !== 'jet') return;   // uçarken silah değişmez; inince değişir
   if (WEAPONS[i].id === 'airstrike' && !airTarget) airTarget = airTargetDefault();
   t.weapon = i; closeWeaponMenu();
 }
@@ -4072,7 +4166,8 @@ function holdButton(el, key) {
   el.addEventListener('contextmenu', e => e.preventDefault());
 }
 holdButton($('bL'), 'left'); holdButton($('bR'), 'right');
-$('bJ').addEventListener('pointerdown', e => { e.preventDefault(); act('j'); });
+$('bJ').addEventListener('pointerdown', e => { e.preventDefault(); try { $('bJ').setPointerCapture(e.pointerId); } catch (er) {} act('j'); });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) $('bJ').addEventListener(ev, () => { if (jetKul || input.jet) act('ju'); });
 $('bMap').addEventListener('click', toggleMap);$('bWeapon').addEventListener('click', () => $('weaponMenu').hidden ? openWeaponMenu() : closeWeaponMenu());
 const bFire = $('bFire');
 bFire.addEventListener('pointerdown', e => { e.preventDefault(); bFire.setPointerCapture(e.pointerId); act('fp'); });
@@ -4085,12 +4180,13 @@ addEventListener('keydown', e => {
   if (state === 'menu' || state === 'over' || e.target.tagName === 'INPUT') return;
   if (KEYMAP[e.code]) { if (!e.repeat) act('k', { k: KEYMAP[e.code], v: true }); e.preventDefault(); }
   else if (e.code === 'Space') { if (!e.repeat) act('fp'); e.preventDefault(); }
-  else if (e.code === 'Enter') act('j');
+  else if (e.code === 'Enter') { if (!e.repeat) act('j'); }
   else if (e.code === 'KeyM') toggleMap();  else if (/^Digit[1-9]$/.test(e.code)) pickWeapon(+e.code.slice(5) - 1);
 });
 addEventListener('keyup', e => {
   if (KEYMAP[e.code]) act('k', { k: KEYMAP[e.code], v: false });
   else if (e.code === 'Space') act('fr');
+  else if (e.code === 'Enter') act('ju');
 });
 addEventListener('blur', () => { for (const k in KEYS) act('k', { k, v: false }); });
 
@@ -4417,7 +4513,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; },
+  spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; },
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
