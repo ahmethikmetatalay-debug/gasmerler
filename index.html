@@ -1808,7 +1808,7 @@ function stepCrates() {
 }
 // Sandık içeriği: iyi (can, özel silah, kalkan, kürek) ya da kötü (tuzak bomba, link)
 // Paket 2 ağırlıkları (toplam 100) + kement 5: pakette kement unutulmuş, sandıktan çıkmaya devam etsin
-const CRATE_LOOT = [['hp', 18], ['weapon', 20], ['shield', 10], ['shovel', 8], ['trap', 8], ['link', 8], ['jet', 7], ['tape', 7], ['revive', 5], ['whistle', 4], ['bos', 5], ['lasso', 5]];
+const CRATE_LOOT = [['hp', 18], ['weapon', 20], ['shield', 10], ['shovel', 8], ['trap', 8], ['link', 8], ['jet', 7], ['tape', 7], ['revive', 5], ['whistle', 5.1], ['bos', 5], ['lasso', 5]];
 const LOOT_TOPLAM = CRATE_LOOT.reduce((s, [, w]) => s + w, 0);
 let zorlaLoot = null, kokular = [];
 function kokuFx(x, y) { kokular.push({ x, y, t: 0 }); Sound.sample('fart'); }
