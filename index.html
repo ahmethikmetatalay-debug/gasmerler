@@ -558,7 +558,7 @@ const WEAPONS = [
   { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (99 hasar)' },
   { id: 'beartrap', name: 'Ayı Kapanı', desc: 'Önündeki zemine kur. Üstüne basan 10 hasar alır, sırası biter. Zıplayarak geçilir. Turu bitirmez' },
   { id: 'jet', name: 'Sprey Jet', desc: 'Zıpla tuşunu basılı tut, uç. Sağ/sol ile yön ver. 3 sn yakıt, turu bitirmez' },
-  { id: 'revive', name: 'Diriltme', desc: 'Mezarın dibinde ATEŞ: o asker 30 canla geri döner. Turu bitirir' },
+  { id: 'revive', name: 'Diriltme', desc: 'Mezarın dibinde ATEŞ: o asker 30 canla geri döner. Ardından atış yapılabilir' },
   { id: 'tape', name: 'Koli Bandı', desc: 'Silahları birbirine bantla: Roketli Ördek ya da Misketli Ördek' },
   { id: 'whistle', name: 'Düdük', desc: 'Sonraki tur KAOS TURU: herkes aynı anda ateş eder. Turu bitirmez' },
   { id: 'rduck', name: 'Roketli Ördek', desc: 'Bazuka gibi uçar, indiği yerde yürür. Tekrar ATEŞ ile patlat' },
@@ -1807,8 +1807,8 @@ function stepCrates() {
   crates = crates.filter(c => !c.dead);
 }
 // Sandık içeriği: iyi (can, özel silah, kalkan, kürek) ya da kötü (tuzak bomba, link)
-// Paket 2 ağırlıkları (toplam 100) + kement 5: pakette kement unutulmuş, sandıktan çıkmaya devam etsin
-const CRATE_LOOT = [['hp', 18], ['weapon', 20], ['shield', 10], ['shovel', 8], ['trap', 8], ['link', 8], ['jet', 7], ['tape', 7], ['revive', 5], ['whistle', 5.1], ['bos', 5], ['lasso', 5]];
+// Ağırlıklar doğrudan yüzde (toplam 100). En nadir eşya düdük
+const CRATE_LOOT = [['hp', 16.5], ['weapon', 19], ['shield', 9], ['shovel', 7.5], ['trap', 7.5], ['link', 7.5], ['jet', 6.6], ['tape', 6.6], ['revive', 5], ['bos', 5], ['lasso', 5], ['whistle', 4.8]];
 const LOOT_TOPLAM = CRATE_LOOT.reduce((s, [, w]) => s + w, 0);
 let zorlaLoot = null, kokular = [];
 function kokuFx(x, y) { kokular.push({ x, y, t: 0 }); Sound.sample('fart'); }
@@ -1884,7 +1884,7 @@ function fire(power) {
     addProj({ type: 'dirilt', x: u.x + d * 12, y: u.y, vx: r1(g.x), vy: r1(g.y - MZ_H * 0.55), fuse: DIRILT_SURE, g, age: 0 });
     Sound.sample('dirilme') || Sound.play('dirilt'); emit({ t: 'sf', n: 'dirilme' });
     if (t.ammo[wi] === 0) t.weapon = 0;
-    shotThisTurn = true; state = 'fly'; input.charging = false; input.power = 0; cam.free = false; return;   // diriltme turu bitirir
+    portalReturn = true; state = 'fly'; input.charging = false; input.power = 0; cam.free = false; return;   // diriltmeden sonra aynı turda atış yapılabilir
   }
   if (w === 'airstrike') { callAirstrike(); if (t.ammo[wi] === 0) t.weapon = 0; state = 'fly'; shotThisTurn = true; input.charging = false; input.power = 0; cam.free = false; return; }
   if (w === 'lasso') {
