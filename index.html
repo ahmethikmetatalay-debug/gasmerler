@@ -115,6 +115,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 .wbtn em{position:absolute;top:-8px;right:-5px;z-index:1;font:12px var(--font-display);font-style:normal;padding:2px 7px;color:#24160c;background:#e2c47a;transform:rotate(-5deg);clip-path:polygon(0 0,100% 0,96% 25%,100% 50%,96% 75%,100% 100%,0 100%,4% 75%,0 50%,4% 25%)}
 .wbtn[aria-pressed="true"]{background:rgba(227,185,127,.92);outline:3px solid var(--ember);outline-offset:1px}
 .wbtn:disabled{opacity:.35}
+.bant{position:absolute;right:max(10px,env(safe-area-inset-right,0px));bottom:calc(112px + env(safe-area-inset-bottom,0px));width:min(330px,calc(100% - 20px));display:grid;gap:10px;padding:12px 10px 10px;background:rgba(20,15,34,.62);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+.bant h4{margin:0;font:18px var(--font-display);color:#e2c47a;display:flex;justify-content:space-between;align-items:center}
+.bant h4 button{font:14px var(--font-display);color:var(--paper);background:none;border:0;padding:4px 8px}
+.bant .wbtn small{display:block}
 
 .banner{position:absolute;left:50%;top:30%;transform:translate(-50%,-50%) scale(.9);font-family:var(--font-display);font-size:clamp(26px,6vw,46px);line-height:1.05;text-align:center;width:max-content;max-width:92vw;pointer-events:none;opacity:0;transition:opacity .25s,transform .25s;text-shadow:0 3px 0 rgba(0,0,0,.35),0 0 24px rgba(0,0,0,.4)}
 .banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
@@ -325,6 +329,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
   </div>
 
   <div class="chip weapons" id="weaponMenu" hidden></div>
+  <div class="chip bant" id="bantPanel" hidden></div>
   <div class="banner" id="banner"></div>
   <div class="chip toast" id="toast"></div>
   <div class="feed" id="feed" aria-live="polite"></div>
@@ -1085,11 +1090,11 @@ function teleportProj(p, yOff) {
   rearm(p, cx, cy);
   const hit = findEntry(p, cx, cy, 15); if (!hit) return false;
   const [P, Q] = hit;
-  if (p.type === 'goat' && !p.vx) p.vx = p.dir * 90;
+  if (YURUYEN.has(p.type) && !p.vx) p.vx = p.dir * 90;
   const [vx, vy] = portalVel(P, Q, p.vx, p.vy), [qx, qy] = portalCenter(Q);
   p.x = qx + Q.nx * 18; p.y = qy + Q.ny * 18 + yOff;
   p.vx = vx; p.vy = vy; p.parm = false; p.tpCount = (p.tpCount || 0) + 1; p.resting = false; p.portalli = true;   // İmkânsız Atış adayı
-  if (p.type === 'goat') { p.grounded = false; p.dir = vx < 0 ? -1 : 1; }
+  if (YURUYEN.has(p.type)) { p.grounded = false; p.dir = vx < 0 ? -1 : 1; }
   portalFx(qx, qy, Q.s);
   return true;
 }
@@ -1778,7 +1783,8 @@ function fire(power) {
   if (w === 'bazooka') addProj({ type: 'rocket', x: sx, y: sy, vx: dx * sp, vy: dy * sp, wind: true, impact: true, r: 42, dmg: 48, age: 0 });
   else if (w === 'grenade') addProj({ type: 'grenade', x: sx, y: sy, vx: dx * sp, vy: dy * sp, fuse: 3, bounce: 0.5, r: 46, dmg: 50, age: 0 });
   else if (w === 'cluster') addProj({ type: 'cluster', x: sx, y: sy, vx: dx * sp, vy: dy * sp, impact: true, r: 30, dmg: 24, age: 0 });
-  else if (w === 'goat') addProj({ type: 'goat', x: u.x + u.facing * 14, y: u.y, h: 14, vx: 0, vy: 0, grounded: false, dir: u.facing, fuse: 6, hop: 0.8, walk: 0, r: 60, dmg: 60, age: 0 });
+  else if (w === 'goat' || w === 'mduck') addProj({ type: w, x: u.x + u.facing * 14, y: u.y, h: 14, vx: 0, vy: 0, grounded: false, dir: u.facing, fuse: 6, hop: 0.8, walk: 0, r: 60, dmg: 60, age: 0 });
+  else if (w === 'rduck') addProj({ type: 'rduck', x: sx, y: sy, vx: dx * sp, vy: dy * sp, wind: true, age: 0, dir: u.facing });
   else {
     const slot = portalPending ? 1 : 0;
     addProj({ type: 'pshot', x: sx, y: sy, vx: dx * sp, vy: dy * sp, slot, o: units.indexOf(u), age: 0 });
@@ -1998,10 +2004,18 @@ function addPop(x, y, text, c) {
   emit({ t: 'pop', x: r1(x), y: r1(y), text, c });
 }
 
+const YURUYEN = new Set(['goat', 'rduckY', 'mduck']);   // yürüyen ördekler: tekrar ATEŞ ile patlar
+// Roketli Ördek ilk değdiği yerde patlamaz: iner ve Deli Ördek gibi yürümeye başlar
+function ordekIndir(p) {
+  p.type = 'rduckY';
+  Object.assign(p, { h: 14, grounded: false, dir: p.vx < 0 ? -1 : 1, fuse: 6, hop: 0.8, walk: 0, r: 60, dmg: 60, wind: false, vx: p.vx * 0.15, vy: Math.min(0, p.vy * 0.15) });
+  for (let k = 0; k < 16 && !bodyFree(p.x, p.y, 14); k++) p.y -= 2;
+  sfx('ordek', { vol: 0.6 });
+}
 function stepProjectile(p) {
   p.age += DT;
   if (p.pcd) p.pcd = Math.max(0, p.pcd - DT);
-  if (p.type === 'goat') { stepGoat(p); return; }
+  if (YURUYEN.has(p.type)) { stepGoat(p); return; }
   if (p.type === 'pshot') { stepPortalShot(p); return; }
   if (p.type === 'bhole') { stepBlackHole(p); return; }
   if (p.type === 'jet') { stepJet(p); return; }
@@ -2017,8 +2031,9 @@ function stepProjectile(p) {
       if (p.y > WATER + 4) { splash(p.x, WATER); p.dead = true; return; }
       if (p.x < -300 || p.x > W + 300) { p.dead = true; return; }
       if (teleportProj(p, 0)) break;
-      const hitUnit = p.impact && units.some(u => u.alive && (p.age > 0.12 || u !== active) && Math.hypot(p.x - u.x, p.y - (u.y - UNIT_H / 2)) < 17);
+      const hitUnit = (p.impact || p.type === 'rduck') && units.some(u => u.alive && (p.age > 0.12 || u !== active) && Math.hypot(p.x - u.x, p.y - (u.y - UNIT_H / 2)) < 17);
       if (isSolid(p.x, p.y) || hitUnit) {
+        if (p.type === 'rduck') { p.x = ox; p.y = oy; ordekIndir(p); return; }
         if (p.impact) { detonate(p); return; }
         const nrm = normalAt(p.x, p.y);
         p.x = ox; p.y = oy;
@@ -2032,7 +2047,7 @@ function stepProjectile(p) {
       }
     }
   } else if (!isSolid(p.x, p.y + 3)) p.resting = false;
-  if (p.type === 'rocket') rocketSmoke(p);
+  if (p.type === 'rocket' || p.type === 'rduck') rocketSmoke(p);
   if (p.fuse !== undefined) { p.fuse -= DT; if (p.fuse <= 0) detonate(p); }
 }
 
@@ -2081,7 +2096,7 @@ function stepGoat(g) {
   } else airStep(g, DT);
   teleportProj(g, 7);
   if (g.y > WATER + 4) { splash(g.x, WATER); g.dead = true; return; }
-  if (g.fuse <= 0) { g.dead = true; explode(g.x, g.y - 8, g.r, g.dmg, 0.75, undefined, g); }
+  if (g.fuse <= 0) { g.dead = true; explode(g.x, g.y - 8, g.r, g.dmg, 0.75, undefined, g); if (g.type === 'mduck') kapakSac(g); }
 }
 
 // ---- Ana simülasyon adımı (sabit 60 Hz, sadece local ve host'ta) ----
@@ -2172,7 +2187,8 @@ function roketSus() { if (roketSes) { roketSes.stop(0.15); roketSes = null; } }
 // Bazuka: namlu patlaması ile roketin süzülme sesi aynı anda başlar; roket patlayınca süzülme susar
 function atesSesi(w) {
   if (w === 'bazooka' && Sound.sample('bazukaAtes')) { roketSus(); roketSes = Sound.sample('roketUcus') || null; return; }
-  if (w === 'goat' && Sound.sample('ordek')) return;
+  if ((w === 'goat' || w === 'mduck') && Sound.sample('ordek')) return;
+  if (w === 'rduck' && Sound.sample('bazukaAtes')) return;
   if (w === 'portal' && Sound.sample('portalAtes')) return;
   Sound.play('fire');
 }
@@ -2477,7 +2493,7 @@ function clientTick(dt) {
   for (const p of projs) {
     if (STATIK_MERMI.has(p.type)) { p.x = p.bx; p.y = p.by; continue; }
     p.x = p.bx + p.vx * since; p.y = p.by + p.vy * since;
-    if (p.type === 'rocket') rocketSmoke(p);
+    if (p.type === 'rocket' || p.type === 'rduck') rocketSmoke(p);
   }
   bekleCiz();
 }
@@ -2669,6 +2685,7 @@ function applyAct(m) {
     case 'fr': fireRelease(); break;
     case 'j': jump(); break;
     case 'ju': input.jet = false; break;
+    case 'bant': if (TARIF[m.r]) bantla(m.r); break;
     case 'w': selectWeapon(m.i | 0); break;
     case 'tg':   // Hele İki Gözüm hedefi
       if (state === 'aim' && team() && WEAPONS[team().weapon].id === 'airstrike' && Number.isFinite(m.x) && Number.isFinite(m.y))
@@ -3610,6 +3627,15 @@ function drawProjectile(p, t) {
     const d = p.dir < 0 ? -1 : 1;
     ctx.scale(d * 1.1, 1.1);
     HURDA.ordek(ctx, t, p.grounded, p.fuse < 2 && Math.floor(t * 8) % 2 === 1);
+  } else if (p.type === 'rduck') {
+    // Uçan Roketli Ördek: burnu gidiş yönünde, egzozdan duman
+    const d = p.vx < 0 ? -1 : 1;
+    ctx.scale(d * 1.1, 1.1); ctx.rotate(Math.atan2(p.vy, Math.abs(p.vx) || 0.001) * 0.6); ctx.translate(0, 9);
+    YENI.roketliOrdek(ctx, t, false, false, true);
+  } else if (p.type === 'rduckY' || p.type === 'mduck') {
+    const d = p.dir < 0 ? -1 : 1, uy = p.fuse < 2 && Math.floor(t * 8) % 2 === 1;
+    ctx.scale(d * 1.1, 1.1);
+    if (p.type === 'rduckY') YENI.roketliOrdek(ctx, t, p.grounded, uy, false); else YENI.misketliOrdek(ctx, t, p.grounded, uy);
   } else if (p.type === 'jet') {
     ctx.scale(p.dir < 0 ? -1.15 : 1.15, 1.15);
     HAVA.f16(ctx);
@@ -3895,7 +3921,7 @@ function updateHud() {
   wf.style.width = Math.abs(wind) * 50 + '%';
   $('windTxt').textContent = wind === 0 ? '0' : (wind < 0 ? '← ' : '') + Math.round(Math.abs(wind) * 10) + (wind > 0 ? ' →' : '');
   $('bFire').style.setProperty('--p', input.charging ? input.power : 0);
-  const goat = state === 'fly' && projs.some(p => p.type === 'goat');
+  const goat = state === 'fly' && projs.some(p => YURUYEN.has(p.type));
   const wid = WEAPONS[t.weapon].id;
   // Kürekle kazmaya başladıktan sonra ATEŞ açılır: basınca önceki silahla atış yapılır
   const shovelIdle = wid === 'shovel' && !digging;
@@ -3944,7 +3970,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // ---- Girdi (oyun mantığı: local ve host'ta çalışır) ----
 function firePress() {
-  if (state === 'fly') { const g = projs.find(p => p.type === 'goat'); if (g) g.fuse = 0; return; }
+  if (state === 'fly') { const g = projs.find(p => YURUYEN.has(p.type)); if (g) g.fuse = 0; return; }
   if (state !== 'aim' || !active || !active.alive) return;
   closeWeaponMenu();
   const t = team(), wid = WEAPONS[t.weapon].id;
@@ -3965,6 +3991,35 @@ function uyari(text) {
   toast(text);
 }
 function fireRelease() { if (input.charging && state === 'aim') fire(input.power); }
+// ---- Koli Bandı: iki tarif. Bantlamak turu bitirmez ----
+const TARIF = { rduck: { ad: 'Roketli Ördek', harca: ['tape', 'goat'] }, mduck: { ad: 'Misketli Ördek', harca: ['tape', 'goat', 'cluster'] } };
+const tarifHazir = (t, r) => TARIF[r].harca.every(k => t.ammo[WI(k)] !== 0);
+function bantla(r) {
+  const t = team();
+  if (state !== 'aim' || !t || !TARIF[r] || !tarifHazir(t, r)) return;
+  for (const k of TARIF[r].harca) if (t.ammo[WI(k)] > 0) t.ammo[WI(k)]--;
+  t.ammo[WI(r)]++;
+  if (WEAPONS[t.weapon].id !== r && t.ammo[t.weapon] === 0) t.weapon = 0;
+  if (active) addPop(active.x, active.y - 52, '+1 ' + TARIF[r].ad, '#d9b86a');
+  sesYay('bant');
+}
+function bantPaneli() {
+  const t = team(), m = $('bantPanel'); m.textContent = '';
+  const h = document.createElement('h4'); h.textContent = 'Bantla';
+  const x = document.createElement('button'); x.textContent = 'Kapat'; x.addEventListener('click', () => { m.hidden = true; }); h.appendChild(x); m.appendChild(h);
+  for (const r of ['rduck', 'mduck']) {
+    const b = document.createElement('button'); b.className = 'wbtn'; b.id = 'bant-' + r;
+    b.disabled = !tarifHazir(t, r);
+    const tx = document.createElement('span'); tx.className = 'wtxt';
+    const n = document.createElement('b'); n.textContent = TARIF[r].ad;
+    const k = document.createElement('small'); k.textContent = r === 'rduck' ? 'Bant + Deli Ördek' : 'Bant + Deli Ördek + Misket';
+    tx.append(n, k); b.append(silahIkon(r), tx);
+    b.addEventListener('click', () => { act('bant', { r }); m.hidden = true; });
+    m.appendChild(b);
+  }
+  m.hidden = false;
+}
+
 // ---- Sprey Jet: zıpla tuşu basılıyken itki, sağ/sol ile yön. Bir kullanım 3 sn yakıt; yere inince ya da yakıt bitince biter ----
 const JET_YAKIT = 3, JET_ITKI = 1.6, JET_VY = 220, JET_VX = 140, JET_AX = 420;
 let jetKul = false, jetYakit = 0, jetHavada = false, jetItki = false, jetSesT = 0;
@@ -4007,7 +4062,7 @@ function weaponLocked(t, i) { return t.ammo[i] === 0 || (WEAPONS[i].id === 'shov
 function selectWeapon(i) {
   if (state !== 'aim' || input.charging || i < 0 || i >= WEAPONS.length) return;
   const t = team();
-  if (weaponLocked(t, i)) return;
+  if (weaponLocked(t, i) || WEAPONS[i].id === 'tape') return;
   if (['shovel', 'jet'].includes(WEAPONS[i].id) && !['shovel', 'jet'].includes(WEAPONS[t.weapon].id)) t.prevW = t.weapon;
   if (jetKul && WEAPONS[i].id !== 'jet') return;   // uçarken silah değişmez; inince değişir
   if (WEAPONS[i].id === 'airstrike' && !airTarget) airTarget = airTargetDefault();
@@ -4018,6 +4073,7 @@ function selectWeapon(i) {
 function pickWeapon(i) {
   if (state !== 'aim' || input.charging || !myTurn() || !team() || weaponLocked(team(), i)) return;
   closeWeaponMenu();
+  if (WEAPONS[i].id === 'tape') { bantPaneli(); return; }
   act('w', { i });
   if (mode === 'client') team().weapon = i;
   if (WEAPONS[i].id === 'airstrike') toast('Haritada hedefe dokun, sonra BOMBALA');
@@ -4078,7 +4134,7 @@ function openWeaponMenu() {
   });
   m.hidden = false;
 }
-function closeWeaponMenu() { $('weaponMenu').hidden = true; }
+function closeWeaponMenu() { $('weaponMenu').hidden = true; $('bantPanel').hidden = true; }
 
 function canAim() { return state === 'aim' && active && active.alive && !input.charging && myTurn(); }
 function aimAt(e) {
@@ -4513,7 +4569,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; },
+  spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, bantla,
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
