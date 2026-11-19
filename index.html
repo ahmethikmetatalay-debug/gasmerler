@@ -1253,19 +1253,36 @@ function startGame(opts) {
 
 // ---- Asit Yağmuru: üç tur üst üste kimse hasar almazsa bir tur uyarı (hafif yağmur), sonra 2 sn yoğun yağış ----
 // Yağış gökyüzüne açık toprağı eritir (sivri tepeler yumuşar) ve açıkta duran askerlere 5-10 hasar verir.
-const ASIT_SAKIN = 3, ASIT_SURE = 2, ASIT_ERI = 6, ASIT_TEPE_MAX = 24;
+// Erime engebeleri düzleştirir: asit toprak ekleyemez, o yüzden tepeler çevresindeki çukurların seviyesine doğru kesilir.
+// Hedef yüzey = yumuşatılmış yüzey ile yumuşatılmış "dip" (çevredeki en alçak zemin) arasının ortası. Hedefin üstünde
+// kalan her şey erir, bir noktada en fazla ASIT_MAX px. Çukurlarda ve düz yerlerde yalnız ince bir kat (ASIT_ERI) erir.
+// Komşu sütunlar ancak aynı yüzeydeyse (aradaki fark ASIT_KOPUK'tan azsa) hesaba girer: yüzen ada zeminle karışmaz.
+const ASIT_SAKIN = 3, ASIT_SURE = 2, ASIT_ERI = 6, ASIT_MAX = 100, ASIT_PENCERE = 110, ASIT_KOPUK = 140;
 let sakinTur = 0, hasarVar = false, asitDurum = null, asitT = 0, cizirtilar = [];
 function asitEritHesapla() {
-  const top = new Int32Array(W), out = [];
+  const top = new Int32Array(W), out = [], bos = WATER - 2;
   for (let x = 0; x < W; x++) { let y = 0; while (y < WATER && !solid[y * W + x]) y++; top[x] = y; }
+  // Aynı yüzeyde yürüyerek komşu: sütundan sütuna farkı ASIT_KOPUK'u geçmeyen kesintisiz bölge
+  const bolge = new Int32Array(W); let b = 0;
+  for (let x = 0; x < W; x++) { if (top[x] >= bos) { bolge[x] = -1; continue; } if (x === 0 || bolge[x - 1] < 0 || Math.abs(top[x] - top[x - 1]) > ASIT_KOPUK) b++; bolge[x] = b; }
+  const suz = (src, r, fn) => {   // bölge içinde kayan pencere: fn = 'ort' ya da 'dip'
+    const o = new Float32Array(W);
+    for (let x = 0; x < W; x++) {
+      if (bolge[x] < 0) { o[x] = src[x]; continue; }
+      let sum = 0, n = 0, mx = -1e9;
+      for (let xx = Math.max(0, x - r); xx <= Math.min(W - 1, x + r); xx++) { if (bolge[xx] !== bolge[x]) continue; sum += src[xx]; n++; if (src[xx] > mx) mx = src[xx]; }
+      o[x] = fn === 'dip' ? mx : sum / n;
+    }
+    return o;
+  };
+  const ort = suz(suz(top, ASIT_PENCERE, 'ort'), ASIT_PENCERE >> 1, 'ort');
+  const dip = suz(suz(top, ASIT_PENCERE, 'dip'), ASIT_PENCERE >> 1, 'ort');
   for (let x = 0; x < W; x++) {
-    if (top[x] >= WATER - 2) continue;
-    let sum = 0, n = 0;
-    for (let k = -7; k <= 7; k++) { const xx = x + k; if (xx >= 0 && xx < W && top[xx] < WATER - 2) { sum += top[xx]; n++; } }
-    const ort = sum / n;   // 15 px kayan ortalama: üstünde kalan kısım (sivri tepe) da erir
-    const y1 = Math.max(top[x] + ASIT_ERI, Math.min(Math.floor(ort), top[x] + ASIT_ERI + ASIT_TEPE_MAX));
+    if (bolge[x] < 0) continue;
+    const hedef = (ort[x] + dip[x]) / 2;
+    const y1 = Math.min(top[x] + ASIT_MAX, Math.max(top[x] + ASIT_ERI, Math.floor(hedef)));
     let y = top[x];
-    while (y < y1 && y < WATER - 2 && solid[y * W + x]) y++;   // yalnız gökyüzüne açık ilk toprak katmanı
+    while (y < y1 && y < bos && solid[y * W + x]) y++;   // yalnız gökyüzüne açık ilk toprak katmanı (mağara tavanını delmez)
     if (y > top[x]) out.push(x, top[x], y - top[x]);
   }
   return out;
