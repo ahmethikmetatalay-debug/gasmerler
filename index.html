@@ -797,6 +797,7 @@ const Sound = (() => {
         [72, 76, 79, 84, 88].forEach((m, i) => { osc('triangle', hz(m), 0, t + 0.07 + i * 0.055, 0.16, 0.12); osc('sine', hz(m + 12), 0, t + 0.07 + i * 0.055, 0.1, 0.04); });
         nz(t + 0.3, 0.25, 0.05, 'highpass', 7000, 0); break;
       }
+      case 'mezarKir': nz(t, 0.35, 0.6, 'lowpass', 1800, 200); osc('triangle', 180, 60, t, 0.25, 0.4); nz(t + 0.05, 0.4, 0.2, 'bandpass', 3000, 900); break;   // taş çatlar, parçalar dökülür
       case 'whip': nz(t, 0.05, 0.55, 'highpass', 3200, 0); osc('square', 2200, 500, t, 0.045, 0.09); nz(t + 0.03, 0.08, 0.2, 'bandpass', 1800, 900); break;
     }
   }
@@ -842,7 +843,20 @@ const TEMA = {
 const TEMA_PLASTIK = { ...TEMA };
 
 // ---- Arazi ----
-function isSolid(x, y) { x |= 0; y |= 0; if (x < 0 || x >= W || y < 0 || y >= H) return false; return solid[y * W + x] === 1; }
+function isSolid(x, y) { x |= 0; y |= 0; if (x < 0 || x >= W || y < 0 || y >= H) return false; return solid[y * W + x] === 1 || (graves.length > 0 && mezarIci(x, y, null)); }
+// Büyük mezar taşı katı bir nesnedir: alt kısmı dikdörtgen, üstü yarım daire (orijin tabanın ortası)
+const MZ_W = 26.4, MZ_H = 35.2, MZ_R = MZ_W / 2;
+function mezarIci(x, y, haric) {
+  for (const g of graves) {
+    if (g === haric) continue;
+    const dx = x - g.x, dy = y - g.y;
+    if (dy > 0.5 || dy < -MZ_H || dx < -MZ_R || dx > MZ_R) continue;
+    const ky = dy + (MZ_H - MZ_R);             // yarım dairenin merkezine göre
+    if (ky >= 0 || dx * dx + ky * ky <= MZ_R * MZ_R) return true;
+  }
+  return false;
+}
+const araziKati = (x, y) => { x |= 0; y |= 0; return x >= 0 && x < W && y >= 0 && y < H && solid[y * W + x] === 1; };
 
 function genTerrain() {
   Object.assign(TEMA, TEMA_PLASTIK); haritaDuvar = false;
@@ -1369,9 +1383,30 @@ function drown(u) {
 
 function kill(u) {
   u.alive = false; closePortalsOf(u);
-  graves.push({ x: u.x, y: u.y, c: u.team.c, ti: teams.indexOf(u.team) });
   olumOlayi(u, false);
   explode(u.x, u.y - 8, 24, 14);
+  // Mezar patlamadan sonra konur (kendi patlamasından hasar almasın); içinde kalan asker yana itilir
+  const g = { x: u.x, y: u.y, c: u.team.c, ti: teams.indexOf(u.team), hp: MEZAR_HP, ui: units.indexOf(u) };
+  for (const o of units) if (o.alive && Math.abs(o.x - g.x) < MZ_R + 5 && o.y > g.y - MZ_H - UNIT_H && o.y < g.y + 12) {
+    o.x = g.x + (o.x < g.x ? -1 : 1) * (MZ_R + 7); o.grounded = false; o.vx = 0; o.vy = 0;
+  }
+  graves.push(g);
+}
+const MEZAR_HP = 40;
+// Patlama mezar taşlarına da vurur (askerle aynı düşüş); canı biten taş kırılır
+function mezarHasar(x, y, r, dmg) {
+  for (const g of graves) {
+    const d = Math.hypot(g.x - x, g.y - MZ_H / 2 - y), R = r * 1.5;
+    if (d < R) g.hp -= Math.round(dmg * (0.35 + 0.65 * (1 - d / R)));
+  }
+  const kirik = graves.filter(g => g.hp <= 0);
+  if (!kirik.length) return;
+  graves = graves.filter(g => g.hp > 0);
+  for (const g of kirik) { mezarKirFx(g.x, g.y); emit({ t: 'mk', x: r1(g.x), y: r1(g.y) }); }
+}
+function mezarKirFx(x, y) {
+  Sound.play('mezarKir');
+  for (let k = 0; k < 18; k++) { const a = -Math.PI * Math.random(), v = 60 + Math.random() * 200; parts.push({ kind: 'dirt', c: k % 3 ? '#b9b2c4' : '#8a8396', x: x + (Math.random() - 0.5) * 20, y: y - Math.random() * 30, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: G, size: 2.5 + Math.random() * 3.5, life: 1.1, max: 1.1 }); }
 }
 
 // ---- Olay akışı: sağ üstte kısa satırlar (kim hangi sandığı aldı, kim kimi öldürdü) ----
@@ -1810,6 +1845,7 @@ function explode(x, y, r, dmg, kb = 1, ses) {
     const nx = (cx - x) / (d || 1), ny = (cy - y) / (d || 1), imp = 80 + 520 * f;
     u.vx = nx * imp * kb; u.vy = (ny * imp - 160 * f - 60) * kb; u.grounded = false;
   }
+  if (graves.length) mezarHasar(x, y, r, dmg);
   for (const p of projs) if (p.resting) p.resting = false;
   // Patlamaya yakalanan sürpriz sandık da patlar; gömülü altın sandık hiçbir şeyden etkilenmez
   const chain = crates.filter(c => !c.dead && c.k !== 1 && Math.hypot(c.x - x, c.y - 9 - y) < r + 8);
@@ -1974,7 +2010,9 @@ function step() {
   for (let i = 0; i < projs.length; i++) stepProjectile(projs[i]);
   projs = projs.filter(p => !p.dead);
   stepCrates();
-  for (const g of graves) if (!isSolid(g.x, g.y + 1) && g.y < WATER + 20) g.y += 2;
+  // Mezar: altı boşalırsa düşer (kendisini katı saymaz), suya düşerse kaybolur
+  for (const g of graves) if (!mezarIci(g.x, g.y + 1, g) && !araziKati(g.x, g.y + 1) && !araziKati(g.x - 9, g.y + 1) && !araziKati(g.x + 9, g.y + 1)) { g.y += 2; if (g.y > WATER + 4) { g.dead = true; splash(g.x, WATER); } }
+  if (graves.some(g => g.dead)) graves = graves.filter(g => !g.dead);
 
   if (state === 'aim' && (!active.alive || active.hp <= 0)) endTurn();
   if (state === 'fly' && projs.length === 0) {
@@ -2174,7 +2212,7 @@ function snapshot() {
     u: units.map(u => [r1(u.x), r1(u.y), u.hp, u.alive ? 1 : 0, u.facing, r2(u.aim), u.traitor ? 1 : 0, u.link ? 1 : 0]),
     dl: digLeft, dg: digging ? 1 : 0, at: airTarget ? [r1(airTarget.x), r1(airTarget.y)] : 0, sw: shotThisTurn ? 1 : 0,
     p: projs.map(p => [p.id, p.type, r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.fuse !== undefined ? r2(p.fuse) : -1, p.type === 'pshot' ? p.slot : (p.dir || 0), p.grounded ? 1 : 0]),
-    g: graves.map(g => [r1(g.x), r1(g.y), g.ti]),
+    g: graves.map(g => [r1(g.x), r1(g.y), g.ti, g.hp, g.ui]),
     c: crates.map(c => [c.id, r1(c.x), r1(c.y), c.k, c.para ? 1 : 0]),
     po: portals.map(P => [r1(P.x), r1(P.y), r2(P.nx), r2(P.ny), P.o, P.s]),
   };
@@ -2251,6 +2289,7 @@ function onClientData(m) {
     case 'fi': if (inGame) atesSesi(String(m.w)); break;
     case 'sf': if (inGame && Sound.has(String(m.n))) Sound.sample(String(m.n), { o: m.o == null ? undefined : +m.o, delay: +m.d || 0, vol: m.v == null ? 1 : +m.v }); break;
     case 'pk': if (inGame) Sound.play('sandik'); break;
+    case 'mk': if (inGame) mezarKirFx(+m.x, +m.y); break;
     case 'kb': if (inGame) kokuFx(+m.x, +m.y); break;
     case 'ev': if (inGame) olayGoster(m.p); break;
     case 'vp': if (Array.isArray(m.l)) Telsiz.listele(m.l.slice(0, MAX_PLAYERS).map(String)); break;
@@ -2302,7 +2341,7 @@ function applySnap(s) {
     if (p.x === undefined) { p.x = a[2]; p.y = a[3]; }
     return p;
   });
-  graves = (s.g || []).map(a => ({ x: a[0], y: a[1], c: (teams[a[2]] || TEAM_COLORS[0]).c }));
+  graves = (s.g || []).slice(0, 64).map(a => ({ x: +a[0], y: +a[1], c: (teams[a[2]] || TEAM_COLORS[0]).c, hp: a[3] | 0, ui: a[4] | 0 }));
   crates = (s.c || []).map(a => ({ id: a[0], x: a[1], y: a[2], k: a[3], para: !!a[4] }));
   portals = (s.po || []).slice(0, 40).map(a => ({ x: a[0], y: a[1], nx: a[2], ny: a[3], o: a[4] | 0, s: a[5] ? 1 : 0 }));
   lastSnapAt = now; warnedStale = false;
@@ -3544,13 +3583,7 @@ function render(t) {
   ctx.drawImage(terr, 0, 0, W, H);
   for (const P of portals) drawPortal(P, t);
   drawAirTarget(t);
-  for (const g of graves) {
-    ctx.save(); ctx.translate(g.x, g.y); ctx.scale(1.3, 1.3);
-    ctx.fillStyle = '#b9b2c4'; ctx.strokeStyle = '#4b4458'; ctx.lineWidth = 1.2;
-    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-6, -10); ctx.arc(0, -10, 6, Math.PI, 0); ctx.lineTo(6, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
-    ctx.fillStyle = g.c; ctx.fillRect(-3, -4, 6, 2);
-    ctx.restore();
-  }
+  for (const g of graves) { ctx.save(); ctx.translate(g.x, g.y); YENI.mezar(ctx, g.c, g.hp < 20); ctx.restore(); }
   for (const c of crates) drawCrate(c, t);
   for (const k of kokular) { ctx.save(); ctx.translate(k.x, k.y); YENI.kokuBulutu(ctx, k.t / 1.2); ctx.restore(); }
   for (const u of units) if (u.alive && u !== active) drawUnit(u, false, t);
