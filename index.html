@@ -1088,7 +1088,7 @@ function teleportProj(p, yOff) {
   if (p.type === 'goat' && !p.vx) p.vx = p.dir * 90;
   const [vx, vy] = portalVel(P, Q, p.vx, p.vy), [qx, qy] = portalCenter(Q);
   p.x = qx + Q.nx * 18; p.y = qy + Q.ny * 18 + yOff;
-  p.vx = vx; p.vy = vy; p.parm = false; p.tpCount = (p.tpCount || 0) + 1; p.resting = false;
+  p.vx = vx; p.vy = vy; p.parm = false; p.tpCount = (p.tpCount || 0) + 1; p.resting = false; p.portalli = true;   // İmkânsız Atış adayı
   if (p.type === 'goat') { p.grounded = false; p.dir = vx < 0 ? -1 : 1; }
   portalFx(qx, qy, Q.s);
   return true;
@@ -1158,7 +1158,7 @@ function startGame(opts) {
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
   teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; kokular = [];
-  turSay = 0; olaySil();
+  turSay = 0; olaySil(); imkansizTur = -1; atanU = null;
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
   elektrikKur();
@@ -1167,7 +1167,7 @@ function startGame(opts) {
   const size = clamp(opts.size | 0, 2, 4), list = opts.teams.slice(0, MAX_PLAYERS), cols = colorsFor(list, gameMode === 'team');
   list.forEach((tt, ti) => {
     const base = TEAM_COLORS[ti];
-    teams.push({ ...base, ...cols[ti], name: String(tt.name || '').trim().slice(0, 14) || base.name, slot: tt.slot, side: gameMode === 'team' ? sideNo(tt.side) : ti, wn: Array.isArray(tt.wn) ? tt.wn : [], units: [], cur: -1, weapon: 0, ammo: START_AMMO.slice(), dmg: 0, ff: 0, skip: 0, kills: 0, lost: 0, crates: 0, best: 0, turDmg: 0 });
+    teams.push({ ...base, ...cols[ti], name: String(tt.name || '').trim().slice(0, 14) || base.name, slot: tt.slot, side: gameMode === 'team' ? sideNo(tt.side) : ti, wn: Array.isArray(tt.wn) ? tt.wn : [], units: [], cur: -1, weapon: 0, ammo: START_AMMO.slice(), dmg: 0, ff: 0, skip: 0, kills: 0, lost: 0, crates: 0, best: 0, turDmg: 0, imkansiz: 0 });
   });
   const total = teams.length * size, xs = [];
   for (let tries = 0; xs.length < total && tries < 5000; tries++) {
@@ -1313,7 +1313,7 @@ function buildAwards() {
   box.appendChild(tbl);
 }
 function hucre(tbl, txt, cls) { const e = document.createElement('span'); if (cls) e.className = cls; e.textContent = String(txt); tbl.appendChild(e); return e; }
-const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best];
+const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkansiz | 0];
 
 // ---- İstatistik kaydı: her telefon oynadığı online maçları kendi hafızasında tutar (son 100 maç) ----
 const MAC_ANAHTAR = 'gasmer-maclar';
@@ -1361,7 +1361,8 @@ function istatistikCiz() {
 
 // Hasar, o an sırası olan oyuncuya yazılır. Kendi tarafına (kendi ya da takım arkadaşının askerine) verdiği hasar dost ateşidir.
 function credit(u, dmg) {
-  const atk = team();
+  if (hasarSebebi === 'asit' || hasarSebebi === 'kapan') return;   // kimsenin atışı değil
+  const atk = atanU ? atanU.team : team();
   if (!atk || dmg <= 0 || state === 'menu' || state === 'over') return;
   if (u.team.side === atk.side) { if (u !== active && state === 'fly') { atk.ff += dmg; ffTurn += dmg; } }
   else { atk.dmg += dmg; atk.turDmg += dmg; }
@@ -1456,7 +1457,7 @@ const OLAY_SURE = 6000, OLAY_MAX = 4;
 function vuranYaz(u) {
   // Düşme hasarı, bu tur onu biri vurduysa vuranı silmez (fırlatan öldürmüş sayılır)
   if (hasarSebebi === 'dusme' && u.vuranTur === turSay && u.vuran) return;
-  u.vuran = hasarSebebi || active; u.vuranTur = turSay;
+  u.vuran = hasarSebebi || atanU || active; u.vuranTur = turSay;
 }
 function kim(u) { return { t: u.team.name + ' ' + u.name, c: u.team.c }; }
 // Belirtme hâli eki, özel isim kesmesiyle: Kömür'ü, Pırasa'yı, Semih'i
@@ -1703,7 +1704,7 @@ function collect(c, u) {
 }
 
 // ---- Silahlar ----
-function addProj(p) { p.id = ++pid; projs.push(p); }
+function addProj(p) { p.id = ++pid; if (p.atan === undefined) p.atan = units.indexOf(active); projs.push(p); }   // atan: fırlatan asker (Kaos Turu'nda sıradaki değil)
 
 function fire(power) {
   const t = team(), wi = t.weapon, w = WEAPONS[wi].id, u = active;
@@ -1881,19 +1882,24 @@ function endDig(t) {
 
 // kb: fırlatma çarpanı (bazuka 0,675, Deli Ördek 0,75: vurduğu askeri daha az fırlatır)
 // ses: patlama sesi (yoksa büyüklüğe göre küçük/büyük)
-function explode(x, y, r, dmg, kb = 1, ses) {
+// kaynak: patlayan mermi (isteğe bağlı): kimin attığını ve portaldan geçip geçmediğini taşır
+function explode(x, y, r, dmg, kb = 1, ses, kaynak) {
   explodeFx(x, y, r, ses);
   if (mode === 'host') carveLog.push([r1(x), r1(y), r]);
   emit({ t: 'x', x: r1(x), y: r1(y), r, s: ses });
+  const onceki = atanU, atan = kaynak && kaynak.atan >= 0 ? units[kaynak.atan] : null;
+  if (atan) atanU = atan;
   for (const u of units) {
     if (!u.alive) continue;
     const cx = u.x, cy = u.y - UNIT_H / 2, d = Math.hypot(cx - x, cy - y), R = r * 1.5;
     if (d >= R) continue;
     const f = 1 - d / R;
     if (hurt(u, Math.round(dmg * (0.35 + 0.65 * f)))) continue;   // kalkan yuttu: fırlatma yok
+    if (kaynak && kaynak.portalli && (atan || active) && u.team.side !== (atan || active).team.side) imkansizAtis((atan || active).team);
     const nx = (cx - x) / (d || 1), ny = (cy - y) / (d || 1), imp = 80 + 520 * f;
     u.vx = nx * imp * kb; u.vy = (ny * imp - 160 * f - 60) * kb; u.grounded = false;
   }
+  atanU = onceki;
   if (graves.length) mezarHasar(x, y, r, dmg);
   for (const p of projs) if (p.resting) p.resting = false;
   // Patlamaya yakalanan sürpriz sandık da patlar; gömülü altın sandık hiçbir şeyden etkilenmez
@@ -1901,6 +1907,16 @@ function explode(x, y, r, dmg, kb = 1, ses) {
   for (const c of chain) c.dead = true;
   if (chain.length) crates = crates.filter(c => !c.dead);
   for (const c of chain) explode(c.x, c.y - 9, 30, 22);
+}
+
+// İmkânsız Atış: portaldan geçmiş bir mermi düşmana hasar verdi. Turda bir kez; ağır çekim yok
+let atanU = null, imkansizTur = -1;
+function imkansizAtis(t) {
+  if (imkansizTur === turSay) return;
+  imkansizTur = turSay; t.imkansiz = (t.imkansiz || 0) + 1;
+  showBanner('İMKÂNSIZ ATIŞ!', '#3ec5ff'); Sound.play('imkansiz'); buzz(150);
+  emit({ t: 'bn', text: 'İMKÂNSIZ ATIŞ!', c: '#3ec5ff', s: 'imkansiz' });
+  olay([{ t: t.name, c: t.c }, ' ', { t: 'imkânsız atış', c: '#3ec5ff' }, ' yaptı!']);
 }
 
 // Görsel/işitsel efektler: hem host hem client kendi ekranında oynatır
@@ -1998,10 +2014,12 @@ function stepPortalShot(p) {
 
 function detonate(p) {
   p.dead = true;
-  explode(p.x, p.y, p.r, p.dmg, p.type === 'rocket' ? 0.675 : 1, p.type === 'grenade' ? 'elBomba' : undefined);
-  if (p.type === 'cluster') for (let i = 0; i < 5; i++) {
-    addProj({ type: 'frag', x: p.x, y: p.y - 6, vx: (rng() * 2 - 1) * 220, vy: -180 - rng() * 220, impact: true, r: 22, dmg: 20, age: 0.2 });
-  }
+  explode(p.x, p.y, p.r, p.dmg, p.type === 'rocket' ? 0.675 : 1, p.type === 'grenade' ? 'elBomba' : undefined, p);
+  if (p.type === 'cluster') kapakSac(p);
+}
+// Misket parçaları: portal işaretini ve atanı devralır
+function kapakSac(p) {
+  for (let i = 0; i < 5; i++) addProj({ type: 'frag', x: p.x, y: p.y - 6, vx: (rng() * 2 - 1) * 220, vy: -180 - rng() * 220, impact: true, r: 22, dmg: 20, age: 0.2, portalli: p.portalli, atan: p.atan });
 }
 
 function stepGoat(g) {
@@ -2019,7 +2037,7 @@ function stepGoat(g) {
   } else airStep(g, DT);
   teleportProj(g, 7);
   if (g.y > WATER + 4) { splash(g.x, WATER); g.dead = true; return; }
-  if (g.fuse <= 0) { g.dead = true; explode(g.x, g.y - 8, g.r, g.dmg, 0.75); }
+  if (g.fuse <= 0) { g.dead = true; explode(g.x, g.y - 8, g.r, g.dmg, 0.75, undefined, g); }
 }
 
 // ---- Ana simülasyon adımı (sabit 60 Hz, sadece local ve host'ta) ----
@@ -2363,7 +2381,7 @@ function onClientData(m) {
     case 'over':
       if (!teams.length) break;
       state = 'over'; winnerIdx = m.w | 0;
-      (Array.isArray(m.st) ? m.st : []).forEach((s, i) => { const t = teams[i]; if (t && Array.isArray(s)) [t.dmg, t.ff, t.kills, t.lost, t.crates, t.best] = [0, 1, 2, 3, 4, 5].map(k => s[k] | 0); });
+      (Array.isArray(m.st) ? m.st : []).forEach((s, i) => { const t = teams[i]; if (t && Array.isArray(s)) [t.dmg, t.ff, t.kills, t.lost, t.crates, t.best, t.imkansiz] = [0, 1, 2, 3, 4, 5, 6].map(k => s[k] | 0); });
       showOver(winnerIdx);
       break;
     case 'toast': toast(String(m.text).slice(0, 80)); break;
