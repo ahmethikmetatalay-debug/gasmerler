@@ -541,9 +541,16 @@ const WEAPONS = [
   { id: 'shovel', name: 'Kürek', desc: 'Sandıktan çıkar. Oklarla nişan yönüne tünel kaz' },
   { id: 'lasso', name: 'Kement', desc: 'Sandıktan çıkar, tek kullanımlık. Dümdüz giden iple uzaktaki sandığı çeker' },
   { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (99 hasar)' },
+  { id: 'beartrap', name: 'Ayı Kapanı', desc: 'Önündeki zemine kur. Üstüne basan 10 hasar alır, sırası biter. Zıplayarak geçilir. Turu bitirmez' },
+  { id: 'jet', name: 'Sprey Jet', desc: 'Zıpla tuşunu basılı tut, uç. Sağ/sol ile yön ver. 3 sn yakıt, turu bitirmez' },
+  { id: 'revive', name: 'Diriltme', desc: 'Mezarın dibinde ATEŞ: o asker 30 canla geri döner. Turu bitirir' },
+  { id: 'tape', name: 'Koli Bandı', desc: 'Silahları birbirine bantla: Roketli Ördek ya da Misketli Ördek' },
+  { id: 'whistle', name: 'Düdük', desc: 'Sonraki tur KAOS TURU: herkes aynı anda ateş eder. Turu bitirmez' },
+  { id: 'rduck', name: 'Roketli Ördek', desc: 'Bazuka gibi uçar, indiği yerde yürür. Tekrar ATEŞ ile patlat' },
+  { id: 'mduck', name: 'Misketli Ördek', desc: 'Deli Ördek gibi yürür, patlayınca 5 kapak saçar' },
 ];
 const WI = id => WEAPONS.findIndex(w => w.id === id);
-const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 0, lasso: 1, airstrike: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
+const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 0, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
 const LASSO_V = 900, LASSO_MAX = 650, LASSO_PULL = 420, LASSO_DMG = 15;   // kement: yerçekimsiz, dümdüz gider; sandığı çeker, rakibi kırbaçlar
 const JET_V = 420, JET_Y = 70, JET_LEAD = 2.6;       // F-16 hedefin üstüne ~2,6 sn'de gelir (ses 5 sn)
 const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 99, ABOMB_R = 44;
@@ -571,7 +578,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v17-';
+const ID_PREFIX = 'gasmerler-v18-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -656,6 +663,7 @@ const Sound = (() => {
     sira: { u: 'sira-sende.mp3', o: 0.17, v: 1.9 },
     su: { u: 'su.mp3', o: 0.23, v: 0.85 },
     zipla: { u: 'ziplama.mp3', o: 0.25, v: 1.5 },
+    fart: { u: 'sfx-fart.mp3', v: 1 },   // sahte sandık; dosya yoksa sessiz geçer
     muzik: { u: 'muzik-lobi.mp3', v: 0.45 },
     ortamHurda: { u: 'harita-ortam-hurda.mp3', v: 0.225, tembel: true },
     kablo: { u: 'harita-ortam-hurda-kablo-cizirtisi.mp3', v: 1.4, tembel: true, parca: [[0.1, 0.58], [1.42, 2.06], [2.9, 4.04]] },
@@ -1118,7 +1126,7 @@ function startGame(opts) {
   genTerrain();
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
-  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0;
+  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; kokular = [];
   turSay = 0; olaySil();
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
@@ -1566,7 +1574,12 @@ function stepCrates() {
   crates = crates.filter(c => !c.dead);
 }
 // Sandık içeriği: iyi (can, özel silah, kalkan, kürek) ya da kötü (tuzak bomba, link)
-const CRATE_LOOT = [['hp', 20], ['weapon', 24], ['shield', 13], ['shovel', 13], ['lasso', 10], ['trap', 10], ['link', 10]];
+// Paket 2 ağırlıkları (toplam 100) + kement 5: pakette kement unutulmuş, sandıktan çıkmaya devam etsin
+const CRATE_LOOT = [['hp', 18], ['weapon', 20], ['shield', 10], ['shovel', 8], ['trap', 8], ['link', 8], ['jet', 7], ['tape', 7], ['revive', 5], ['whistle', 4], ['bos', 5], ['lasso', 5]];
+const LOOT_TOPLAM = CRATE_LOOT.reduce((s, [, w]) => s + w, 0);
+let zorlaLoot = null, kokular = [];
+function kokuFx(x, y) { kokular.push({ x, y, t: 0 }); Sound.sample('fart'); }
+const ESYA_LOOT = { jet: ['Sprey Jet', '#8fd3ff'], tape: ['Koli Bandı', '#d9b86a'], revive: ['Diriltme', '#9fe8ff'], whistle: ['Düdük', '#ff8a3d'] };
 function collect(c, u) {
   c.dead = true;
   u.team.crates++;
@@ -1579,9 +1592,17 @@ function collect(c, u) {
     olay([kim(u), ' altın sandıktan ', { t: 'Hele İki Gözüm', c: '#ffcb3d' }, ' aldı']);
     Sound.sample('altin') || Sound.play('pickup'); return;
   }
-  let r = rng() * 100, kind = 'hp';
+  let r = rng() * LOOT_TOPLAM, kind = 'hp';
   for (const [k, w] of CRATE_LOOT) { if ((r -= w) < 0) { kind = k; break; } }
+  if (zorlaLoot) { kind = zorlaLoot; zorlaLoot = null; }   // yalnız testler
   const a = u.team.ammo, y = u.y - 52;
+  // Sahte sandık: hiçbir şey olmaz, sadece osuruk sesi ve koku bulutu
+  if (kind === 'bos') { kokuFx(c.x, c.y - 18); emit({ t: 'kb', x: r1(c.x), y: r1(c.y - 18) }); return; }
+  if (ESYA_LOOT[kind]) {
+    const [ad, renk] = ESYA_LOOT[kind]; a[WI(kind)]++;
+    addPop(u.x, y, '+1 ' + ad, renk); olay([kim(u), ' ', { t: ad, c: renk }, ' aldı']);
+    Sound.play('sandik'); emit({ t: 'pk' }); return;
+  }
   if (kind === 'trap') {
     addPop(u.x, y, 'TUZAK!', '#ff4d5e');
     olay([kim(u), ' tuzaklı sandığa dokundu']);
@@ -2230,6 +2251,7 @@ function onClientData(m) {
     case 'fi': if (inGame) atesSesi(String(m.w)); break;
     case 'sf': if (inGame && Sound.has(String(m.n))) Sound.sample(String(m.n), { o: m.o == null ? undefined : +m.o, delay: +m.d || 0, vol: m.v == null ? 1 : +m.v }); break;
     case 'pk': if (inGame) Sound.play('sandik'); break;
+    case 'kb': if (inGame) kokuFx(+m.x, +m.y); break;
     case 'ev': if (inGame) olayGoster(m.p); break;
     case 'vp': if (Array.isArray(m.l)) Telsiz.listele(m.l.slice(0, MAX_PLAYERS).map(String)); break;
     case 'tk': konusanGoster(m.s | 0, !!m.on); break;
@@ -3027,6 +3049,252 @@ const OBJE = (() => {
   return { sandik, parasut, portal, tas, karaDelik, kalkan, hainRozet };
 })();
 
+/* ==========================================================================
+   YENİ NESNELER — Gaşmerlerr özellik paketi 2
+   Ayı kapanı, büyük mezar taşı, diriltme (akü + maşalı kablo), koli bandı,
+   Roketli Ördek, Misketli Ördek, Sprey Jet, düdük, asit yağmuru, sahte sandık
+   koku bulutu ve silah menüsü ikonları.
+
+   Hepsi oyunun mevcut çizim diliyle: düz renk, kalın siyah kontur.
+   Ölçüler dünya pikseli (asker ≈ 35 px boyunda). HURDA modülüne bağlıdır
+   (ördek ve kavanoz çizimi oradan gelir), oyunda zaten var.
+   ========================================================================== */
+const YENI = (() => {
+  const K = '#060303', LW = 1.1;
+  const boya = (c, fill, lw = LW) => { c.fillStyle = fill; c.fill(); c.strokeStyle = K; c.lineWidth = lw; c.lineJoin = 'round'; c.stroke(); };
+  const cizgi = (c, col, lw) => { c.strokeStyle = col; c.lineWidth = lw; c.lineCap = 'round'; c.lineJoin = 'round'; c.stroke(); };
+  function rr(c, x, y, w, h, r) {
+    c.beginPath(); c.moveTo(x + r, y); c.lineTo(x + w - r, y); c.quadraticCurveTo(x + w, y, x + w, y + r);
+    c.lineTo(x + w, y + h - r); c.quadraticCurveTo(x + w, y + h, x + w - r, y + h); c.lineTo(x + r, y + h);
+    c.quadraticCurveTo(x, y + h, x, y + h - r); c.lineTo(x, y + r); c.quadraticCurveTo(x, y, x + r, y); c.closePath();
+  }
+  const DEMIR = '#5d6168', DEMIR_A = '#a3a8b0', PAS = '#8a5a3c';
+
+  /* ---------------- AYI KAPANI ----------------
+     Orijin: zeminde, kapanın ortası. kapali=false: kurulu (çeneler yere açık),
+     kapali=true: kapanmış (çeneler dik, dişler kenetli). k: 0→1 kapanma animasyonu (isteğe bağlı) */
+  // Diş sırası: (x0,y0)→(x1,y1) çizgisi boyunca, normal yönünde (nx,ny) sivri dişler
+  function disler(c, x0, y0, x1, y1, n, boy, nx, ny) {
+    c.beginPath(); c.moveTo(x0, y0);
+    for (let i = 0; i < n; i++) {
+      const a = i / n, b = (i + 0.5) / n, d = (i + 1) / n;
+      c.lineTo(x0 + (x1 - x0) * b + nx * boy, y0 + (y1 - y0) * b + ny * boy);
+      c.lineTo(x0 + (x1 - x0) * d, y0 + (y1 - y0) * d);
+    }
+    c.closePath(); c.fillStyle = DEMIR_A; c.fill(); c.strokeStyle = K; c.lineWidth = 0.8; c.lineJoin = 'round'; c.stroke();
+  }
+  function ayiKapani(c, kapali) {
+    // zincir ve toprağa çakılı kazık (sol)
+    c.beginPath(); c.moveTo(-9, -1.2); c.quadraticCurveTo(-13, 1.8, -16.5, -0.4); cizgi(c, K, 2.6);
+    c.beginPath(); c.moveTo(-9, -1.2); c.quadraticCurveTo(-13, 1.8, -16.5, -0.4); c.setLineDash([1.6, 1.1]); cizgi(c, DEMIR_A, 1.3); c.setLineDash([]);
+    c.beginPath(); c.moveTo(-18, -3.6); c.lineTo(-15, -3.6); c.lineTo(-16.5, 1.6); c.closePath(); boya(c, PAS, 0.9);
+    if (!kapali) {
+      // KURULU: yere yatık iki çene, yukarıdan hafif bakış: dişli bir halka, ortada basma tablası
+      c.beginPath(); c.ellipse(0, -2.6, 11.5, 3.6, 0, Math.PI, 0); c.lineWidth = 2.2; c.strokeStyle = K; c.stroke();   // arka çene gölgesi
+      disler(c, -10.5, -3.6, 10.5, -3.6, 8, 3.6, 0, -1);                                                              // arka dişler
+      c.beginPath(); c.ellipse(0, -2.4, 4, 1.4, 0, 0, Math.PI * 2); boya(c, '#b9a46a', 0.9);                            // basma tablası
+      c.beginPath(); c.ellipse(0, -1.6, 11.5, 3.4, 0, 0, Math.PI); c.lineTo(-11.5, -1.6); boya(c, DEMIR, 1.1);         // ön çene
+      disler(c, -9, -1.9, 9, -1.9, 7, 2.6, 0, -1);                                                                     // ön dişler
+      c.beginPath(); c.ellipse(-11.6, -1.4, 2.2, 1.7, 0, 0, Math.PI * 2); boya(c, PAS, 0.9);                            // yaylar
+      c.beginPath(); c.ellipse(11.6, -1.4, 2.2, 1.7, 0, 0, Math.PI * 2); boya(c, PAS, 0.9);
+    } else {
+      // KAPANDI: iki çene ayağa kalkıp kenetlenmiş, dişler ortada iç içe; orijinin üstünde ≈ 16 px
+      rr(c, -9, -2.4, 18, 2.6, 1.1); boya(c, '#3f4248');
+      c.beginPath(); c.ellipse(-9.6, -1.2, 2.2, 1.6, 0, 0, Math.PI * 2); boya(c, PAS, 0.9);
+      c.beginPath(); c.ellipse(9.6, -1.2, 2.2, 1.6, 0, 0, Math.PI * 2); boya(c, PAS, 0.9);
+      for (const yon of [-1, 1]) {   // her çene: dik yarım halka (D biçimi)
+        c.beginPath(); c.moveTo(0, -1.6); c.arc(0, -9, 7.6, Math.PI / 2, -Math.PI / 2, yon < 0); c.lineTo(0, -16.6);
+        c.lineTo(0, -15); c.arc(0, -9, 6, -Math.PI / 2, Math.PI / 2, yon > 0); c.closePath(); boya(c, DEMIR, 1.1);
+      }
+      c.beginPath(); c.moveTo(0, -16.4);
+      for (let i = 0; i < 6; i++) { const y = -16.4 + (i + 0.5) * 2.45; c.lineTo(i % 2 ? -2.2 : 2.2, y); }
+      c.lineTo(0, -1.8); cizgi(c, K, 2.2);                                                                              // kenetlenmiş dişler
+      c.beginPath(); c.moveTo(0, -16.4);
+      for (let i = 0; i < 6; i++) { const y = -16.4 + (i + 0.5) * 2.45; c.lineTo(i % 2 ? -2.2 : 2.2, y); }
+      c.lineTo(0, -1.8); cizgi(c, DEMIR_A, 1);
+    }
+  }
+
+  /* ---------------- BÜYÜK MEZAR TAŞI ----------------
+     Eski mezarın aynısı, karakter boyuna yakın (26 × 34). Orijin: tabanın ortası.
+     mezarYolu() aynı biçimi çizer: araziye "toprak" olarak damgalamak için kullan. */
+  const MZ = 2.2;
+  function mezarYolu(c) {
+    c.beginPath(); c.moveTo(-6 * MZ, 0); c.lineTo(-6 * MZ, -10 * MZ); c.arc(0, -10 * MZ, 6 * MZ, Math.PI, 0); c.lineTo(6 * MZ, 0); c.closePath();
+  }
+  function mezar(c, renk, hasar) {
+    mezarYolu(c); c.fillStyle = '#b9b2c4'; c.fill();
+    c.save(); mezarYolu(c); c.clip();
+    c.fillStyle = '#9e97ab'; c.fillRect(-6 * MZ, -22 * MZ, 2.2 * MZ, 24 * MZ);                       // sol gölge şeridi
+    c.restore();
+    mezarYolu(c); c.strokeStyle = K; c.lineWidth = 1.6; c.lineJoin = 'round'; c.stroke();
+    c.fillStyle = renk; c.strokeStyle = K; c.lineWidth = 0.9;
+    rr(c, -3.6 * MZ, -4.6 * MZ, 7.2 * MZ, 2.4 * MZ, 1); c.fill(); c.stroke();                       // takım rengi şerit
+    c.beginPath(); c.moveTo(-1.3 * MZ, -13 * MZ); c.lineTo(1.3 * MZ, -13 * MZ); c.moveTo(0, -14.4 * MZ); c.lineTo(0, -10.6 * MZ); cizgi(c, '#6e6780', 1.6);   // küçük haç
+    if (hasar) { c.beginPath(); c.moveTo(4 * MZ, -14 * MZ); c.lineTo(2 * MZ, -11 * MZ); c.lineTo(3.4 * MZ, -9 * MZ); c.lineTo(1.6 * MZ, -6.5 * MZ); cizgi(c, K, 0.9); }   // çatlak
+    c.beginPath(); c.moveTo(-6.6 * MZ, 0); c.lineTo(6.6 * MZ, 0); cizgi(c, 'rgba(6,3,3,.35)', 1.4);   // taban gölgesi
+  }
+
+  /* ---------------- DİRİLTME: akü + maşalı kablolar ----------------
+     aku(): orijin akünün tabanı ortası (≈18 × 12). Elde tutulurken ve ikon olarak kullanılır. */
+  function masa(c, x, y, a, renk) {
+    c.save(); c.translate(x, y); c.rotate(a);
+    c.beginPath(); c.moveTo(0, -1.4); c.lineTo(5.5, -2.4); c.lineTo(5.8, -0.6); c.lineTo(0.6, 0); c.closePath(); boya(c, renk, 0.8);
+    c.beginPath(); c.moveTo(0, 1.4); c.lineTo(5.5, 2.4); c.lineTo(5.8, 0.6); c.lineTo(0.6, 0); c.closePath(); boya(c, renk, 0.8);
+    c.restore();
+  }
+  function aku(c) {
+    // kablolar
+    c.beginPath(); c.moveTo(-4.5, -12.5); c.bezierCurveTo(-8, -20, -14, -14, -13, -6); cizgi(c, K, 2.8); c.beginPath(); c.moveTo(-4.5, -12.5); c.bezierCurveTo(-8, -20, -14, -14, -13, -6); cizgi(c, '#d23b2b', 1.6);
+    c.beginPath(); c.moveTo(4.5, -12.5); c.bezierCurveTo(9, -21, 15, -15, 13, -6); cizgi(c, K, 2.8); c.beginPath(); c.moveTo(4.5, -12.5); c.bezierCurveTo(9, -21, 15, -15, 13, -6); cizgi(c, '#2b2b30', 1.6);
+    masa(c, -13, -6, 1.75, '#d23b2b'); masa(c, 13, -6, 1.4, '#3a3a40');
+    // gövde
+    rr(c, -9, -11, 18, 11, 1.6); boya(c, '#3b3f46');
+    rr(c, -9.6, -12.6, 19.2, 2.6, 1); boya(c, '#5a5f68');
+    c.beginPath(); c.rect(-7.5, -8.4, 15, 4.2); boya(c, '#f2c230', 0.8);                              // etiket
+    c.beginPath(); c.moveTo(-4.6, -6.3); c.lineTo(-1.8, -6.3); c.moveTo(-3.2, -7.6); c.lineTo(-3.2, -5); c.moveTo(1.8, -6.3); c.lineTo(4.6, -6.3); cizgi(c, K, 0.9);   // + −
+    c.beginPath(); c.rect(-5.6, -14.4, 2.4, 2); boya(c, '#d23b2b', 0.7); c.beginPath(); c.rect(3.2, -14.4, 2.4, 2); boya(c, '#2b2b30', 0.7);   // kutup başları
+  }
+  // Elektrik arkı: (x0,y0)→(x1,y1), her karede titrer. t: saniye
+  function elektrik(c, x0, y0, x1, y1, t) {
+    const n = 7, dx = (x1 - x0) / n, dy = (y1 - y0) / n, nx = -dy, ny = dx, L = Math.hypot(nx, ny) || 1;
+    for (const [col, lw] of [['rgba(120,220,255,.55)', 4], ['#eaffff', 1.4]]) {
+      c.beginPath(); c.moveTo(x0, y0);
+      for (let i = 1; i < n; i++) { const j = (Math.sin(t * 60 + i * 2.3) * 0.5 + Math.sin(t * 37 + i)) * 2.2; c.lineTo(x0 + dx * i + nx / L * j, y0 + dy * i + ny / L * j); }
+      c.lineTo(x1, y1); cizgi(c, col, lw);
+    }
+  }
+
+  /* ---------------- KOLİ BANDI ---------------- orijin: rulonun ortası (≈16 × 16) */
+  function koliBandi(c) {
+    c.beginPath(); c.moveTo(2, 6.5); c.lineTo(10, 9); c.lineTo(9.2, 12.4); c.lineTo(10.6, 13.8); c.lineTo(8.2, 14.4); c.lineTo(1.2, 9.2); c.closePath(); boya(c, '#d9b86a', 0.9);   // sarkan şerit
+    c.beginPath(); c.ellipse(0, 0, 8.2, 7.6, 0, 0, Math.PI * 2); boya(c, '#c9a24a', 1.3);
+    c.beginPath(); c.ellipse(0, 0, 6.2, 5.7, 0, 0, Math.PI * 2); cizgi(c, 'rgba(6,3,3,.25)', 0.7);
+    c.beginPath(); c.ellipse(0, 0, 3.6, 3.3, 0, 0, Math.PI * 2); boya(c, '#7a5a34', 1.1);              // karton göbek
+    c.beginPath(); c.ellipse(0, 0, 2.4, 2.2, 0, 0, Math.PI * 2); c.fillStyle = '#2a1c14'; c.fill();
+    c.beginPath(); c.arc(-1.5, -1.5, 6.6, Math.PI * 1.05, Math.PI * 1.45); cizgi(c, 'rgba(255,255,255,.4)', 1.1);
+  }
+  // Bir şeyin üstüne yapıştırılmış bant şeridi (çapraz)
+  function bantSeridi(c, x, y, w, a) {
+    c.save(); c.translate(x, y); c.rotate(a);
+    c.beginPath(); c.moveTo(-w / 2, -1.7); c.lineTo(w / 2, -1.7); c.lineTo(w / 2 + 0.8, -0.6); c.lineTo(w / 2, 0.4); c.lineTo(w / 2 + 0.8, 1.7); c.lineTo(-w / 2, 1.7); c.lineTo(-w / 2 - 0.8, 0.5); c.lineTo(-w / 2, -0.5); c.closePath();
+    boya(c, '#d9b86a', 0.8); c.restore();
+  }
+
+  /* ---------------- ROKETLİ ÖRDEK / MİSKETLİ ÖRDEK ----------------
+     Orijin: yere değen nokta, +x yönüne bakar (HURDA.ordek ile aynı). */
+  function roketliOrdek(c, t, yerde, uyari, ucuyor) {
+    // sırtındaki PVC boru (ördeğin arkasında kalır)
+    c.save(); c.translate(-2, -13.5); c.rotate(-0.08);
+    c.beginPath(); c.rect(-11, -2.8, 15, 5.6); boya(c, '#7f8c68');
+    c.beginPath(); c.rect(-13.5, -3.4, 3, 6.8); boya(c, '#d23b2b', 0.9);                              // pet şişe kapağı egzozu
+    if (ucuyor) { c.globalAlpha = 0.85; c.fillStyle = 'rgba(230,230,235,.9)'; for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(-16 - i * 3.4, Math.sin(t * 20 + i) * 0.8, 2 - i * 0.4, 0, Math.PI * 2); c.fill(); } c.globalAlpha = 1; }
+    c.restore();
+    HURDA.ordek(c, t, yerde, uyari);
+    bantSeridi(c, -3, -12, 9, 1.25); bantSeridi(c, 1.6, -12.4, 8, 1.6);
+  }
+  function misketliOrdek(c, t, yerde, uyari) {
+    c.save(); c.translate(-5.5, -17.5); c.rotate(-0.12); c.scale(1.05, 1.05); HURDA.kavanoz(c); c.restore();
+    HURDA.ordek(c, t, yerde, uyari);
+    bantSeridi(c, -5.2, -10.6, 12, 0.08);
+  }
+
+  /* ---------------- SPREY JET ----------------
+     Sırt çantası: mavi bidon + iki sprey kutusu, bantlı. Orijin: askerin sırt noktası
+     (asker sağa bakarken onun solunda). Asker sola bakıyorsa çağıran ctx.scale(-1,1) yapar.
+     itki: 0..1 (tuş basılıyken 1). Yakıt göstergesi isteğe bağlı: yakit 0..1 */
+  function spreyJet(c, t, itki, yakit) {
+    // sprey kutuları (bidonun altında, ağızları aşağı)
+    for (const [x, col] of [[-4.2, '#d23b2b'], [1.4, '#f2c230']]) {
+      rr(c, x, 2, 3.6, 8, 1); boya(c, col, 0.9);
+      c.beginPath(); c.rect(x + 0.9, 10, 1.8, 1.6); boya(c, '#2b2b30', 0.6);
+      c.beginPath(); c.rect(x, 4.6, 3.6, 1.4); c.fillStyle = 'rgba(255,255,255,.55)'; c.fill();
+    }
+    // bidon
+    rr(c, -5.5, -9, 11, 12.5, 2.2); boya(c, '#2f7fd8');
+    c.beginPath(); c.rect(-2, -11.2, 4, 2.4); boya(c, '#f4f1e6', 0.8);
+    c.beginPath(); c.moveTo(-3.8, -5.5); c.lineTo(-3.8, 1); cizgi(c, 'rgba(255,255,255,.35)', 1.2);
+    bantSeridi(c, 0, 2.6, 13, 0); bantSeridi(c, 0, -3.8, 13, 0.05);
+    if (yakit !== undefined) {    // küçük yakıt çubuğu bidonun yanında
+      rr(c, 6.6, -8.5, 2.2, 11, 1); c.fillStyle = 'rgba(6,3,3,.6)'; c.fill();
+      const h = 10 * Math.max(0, Math.min(1, yakit)); c.fillStyle = yakit > 0.25 ? '#8fe36b' : '#ff4d5e'; c.fillRect(7.1, 2 - h, 1.2, h);
+    }
+    if (itki > 0) {               // sprey bulutu: kutuların ağzından aşağı püsküren renkli sis
+      for (const [x, col] of [[-2.4, '210,59,43'], [3.2, '242,194,48']]) for (let i = 0; i < 5; i++) {
+        const k = ((t * 9 + i * 0.37) % 1), y = 12 + k * 14 * itki, r = 1.4 + k * 3.6, ox = Math.sin(t * 13 + i * 2.1) * k * 2.6;
+        c.fillStyle = `rgba(${col},${(0.75 * (1 - k)).toFixed(2)})`; c.beginPath(); c.arc(x + ox, y, r, 0, Math.PI * 2); c.fill();
+      }
+    }
+  }
+  // Sprey Jet parçacık rengi (oyunun parts sistemine 'smoke' yerine verilecek renkler)
+  const SPREY_RENK = ['rgba(210,59,43,', 'rgba(242,194,48,'];
+
+  /* ---------------- DÜDÜK (Kaos Turu) ---------------- orijin: düdüğün ortası (≈18 × 10) */
+  function duduk(c) {
+    c.beginPath(); c.arc(-7, -6.5, 2.4, 0, Math.PI * 2); cizgi(c, K, 2.6); c.beginPath(); c.arc(-7, -6.5, 2.4, 0, Math.PI * 2); cizgi(c, '#d9d2c4', 1.2);   // halka
+    c.beginPath(); c.moveTo(-1, -4.5); c.lineTo(9, -4.5); c.lineTo(9, 0.5); c.lineTo(1, 0.5); c.closePath(); boya(c, '#ff8a3d');                          // ağızlık
+    c.beginPath(); c.arc(-2.5, 0, 5.2, 0, Math.PI * 2); boya(c, '#ff8a3d');                                                                                  // hazne
+    c.beginPath(); c.rect(1.4, -4.5, 2.8, 2.2); c.fillStyle = K; c.fill();                                                                                  // ses deliği
+    c.beginPath(); c.arc(-3.6, -1.4, 2.6, Math.PI * 1.1, Math.PI * 1.7); cizgi(c, 'rgba(255,255,255,.45)', 1);
+  }
+  // Düdük çalınınca ses dalgaları (t: çalındığından beri geçen saniye, 0..1)
+  function dudukDalga(c, t) {
+    for (let i = 0; i < 3; i++) {
+      const k = (t * 1.6 + i * 0.33) % 1, r = 8 + k * 18;
+      c.beginPath(); c.arc(9, -2, r, -0.6, 0.6); cizgi(c, `rgba(255,244,230,${(0.9 * (1 - k)).toFixed(2)})`, 1.6);
+    }
+  }
+
+  /* ---------------- ASİT YAĞMURU ----------------
+     Ekran koordinatlarında üst katman: hafif yeşil sis + eğik damlalar. siddet: 0..1 (uyarı turunda 0.25, yağışta 1) */
+  function asitYagmuru(c, vw, vh, t, siddet, ruzgar) {
+    if (siddet <= 0) return;
+    c.fillStyle = `rgba(150,190,40,${(0.10 * siddet).toFixed(3)})`; c.fillRect(0, 0, vw, vh);
+    const n = Math.round(160 * siddet), egim = 0.18 + (ruzgar || 0) * 0.02;
+    c.lineCap = 'round';
+    for (let i = 0; i < n; i++) {
+      const h1 = ((i * 2654435761) >>> 0) / 4294967296, h2 = ((i * 40503 + 7) % 997) / 997;
+      const sp = 0.55 + h2 * 0.45, y = ((h1 * vh + t * vh * 1.4 * sp) % (vh + 40)) - 20, x = (h2 * vw * 1.3 + y * egim + t * 30) % (vw + 40) - 20;
+      c.strokeStyle = h1 < 0.5 ? 'rgba(190,240,60,.75)' : 'rgba(140,200,40,.6)'; c.lineWidth = 1.6 + h2 * 1.2;
+      c.beginPath(); c.moveTo(x, y); c.lineTo(x - 10 * egim, y - 10 - h2 * 6); c.stroke();
+    }
+  }
+  // Damlanın yere değdiği yerde cızırdayan küçük duman (dünya koordinatı). k: 0..1 ömür
+  function asitCizirti(c, x, y, k) {
+    c.fillStyle = `rgba(200,240,90,${(0.7 * (1 - k)).toFixed(2)})`;
+    for (let i = 0; i < 3; i++) { c.beginPath(); c.arc(x + (i - 1) * 2.4, y - 2 - k * 8 - i, 1.2 + k * 2.2, 0, Math.PI * 2); c.fill(); }
+  }
+  // Asitle hasar alan askerin üstünde: tıslayan yeşil kabarcıklar (orijin: askerin tepesi)
+  function asitYanik(c, t) {
+    for (let i = 0; i < 4; i++) { const k = (t * 1.8 + i * 0.25) % 1; c.fillStyle = `rgba(190,240,60,${(0.8 * (1 - k)).toFixed(2)})`; c.beginPath(); c.arc((i - 1.5) * 4, -k * 10, 1.4 + k * 1.6, 0, Math.PI * 2); c.fill(); }
+  }
+
+  /* ---------------- SAHTE SANDIK: koku bulutu (isteğe bağlı) ----------------
+     Sandık açılınca osuruk sesiyle birlikte yükselen yeşilimsi bulut. k: 0..1 ömür, orijin: sandığın tepesi */
+  function kokuBulutu(c, k) {
+    const a = (1 - k) * 0.8;
+    for (const [x, y, r] of [[-5, 0, 4.4], [3, -2, 5], [0, -7, 4], [7, -8, 3]]) {
+      c.fillStyle = `rgba(170,190,90,${a.toFixed(2)})`; c.beginPath(); c.arc(x * (1 + k * 0.6), y - k * 22, r * (1 + k * 0.8), 0, Math.PI * 2); c.fill();
+    }
+    c.strokeStyle = `rgba(110,130,50,${a.toFixed(2)})`; c.lineWidth = 1.2; c.lineCap = 'round';
+    for (const x of [-4, 3]) { c.beginPath(); c.moveTo(x, -12 - k * 22); c.bezierCurveTo(x + 3, -15 - k * 22, x - 3, -18 - k * 22, x, -21 - k * 22); c.stroke(); }
+  }
+
+  /* ---------------- SİLAH MENÜSÜ İKONLARI ----------------
+     Mevcut silahIkon() ile aynı: 44 × 44 tuvale çizer. id: 'trap' | 'jet' | 'revive' | 'tape' | 'whistle' | 'rduck' | 'mduck' */
+  function ikon(c, id) {
+    const at = (x, y, s, r, fn) => { c.save(); c.translate(x, y); if (r) c.rotate(r); c.scale(s, s); fn(); c.restore(); };
+    if (id === 'trap') at(22, 32, 1.55, 0, () => ayiKapani(c, false));
+    else if (id === 'jet') at(22, 19, 1.5, 0.12, () => spreyJet(c, 0.3, 0.7));
+    else if (id === 'revive') at(22, 36, 1.45, 0, () => aku(c));
+    else if (id === 'tape') at(22, 21, 1.8, 0, () => koliBandi(c));
+    else if (id === 'whistle') at(23, 26, 1.75, -0.2, () => duduk(c));
+    else if (id === 'rduck') at(23, 38, 1.35, 0, () => roketliOrdek(c, 0.4, false, false, false));
+    else if (id === 'mduck') at(24, 39, 1.25, 0, () => misketliOrdek(c, 0.4, false, false));
+  }
+
+  return { ayiKapani, mezar, mezarYolu, MEZAR_W: 12 * MZ, MEZAR_H: 16 * MZ, aku, elektrik, koliBandi, bantSeridi, roketliOrdek, misketliOrdek, spreyJet, SPREY_RENK, duduk, dudukDalga, asitYagmuru, asitCizirti, asitYanik, kokuBulutu, ikon };
+})();
 const UNIT_DRAW_H = 18.5;   // karakterin çizim yüksekliği (yerel birim, UNIT_SCALE ile büyür)
 const AIM_Y = 11;           // silahın ve atışın çıktığı yükseklik: gövde hizası (dünya px)
 
@@ -3284,6 +3552,7 @@ function render(t) {
     ctx.restore();
   }
   for (const c of crates) drawCrate(c, t);
+  for (const k of kokular) { ctx.save(); ctx.translate(k.x, k.y); YENI.kokuBulutu(ctx, k.t / 1.2); ctx.restore(); }
   for (const u of units) if (u.alive && u !== active) drawUnit(u, false, t);
   if (active && active.alive) drawUnit(active, true, t);
   drawZaplar();
@@ -3360,6 +3629,8 @@ function updateFx(dt) {
   for (const p of pops) p.t += dt;
   pops = pops.filter(p => p.t < 1.6);
   for (const b of bubbles) b.t += dt;
+  for (const k of kokular) k.t += dt;
+  kokular = kokular.filter(k => k.t < 1.2);
   bubbles = bubbles.filter(b => b.t < BUBBLE_T);
   for (const u of units) if (u.punchT > 0) u.punchT = Math.max(0, u.punchT - dt);
   shake *= 0.85; if (shake < 0.2) shake = 0;
@@ -3558,14 +3829,16 @@ function silahIkon(id) {
   else if (id === 'shovel') at(5, 30, 1.6, -0.55, () => HURDA.kurek(c));
   else if (id === 'lasso') at(22, 30, 2.4, 0, () => HAVA.kementSarili(c));
   else if (id === 'airstrike') at(22, 23, 0.33, -0.18, () => HAVA.f16(c));
+  else YENI.ikon(c, id === 'beartrap' ? 'trap' : id);   // paket 2 eşyaları
   return cv;
 }
 function openWeaponMenu() {
   if (state !== 'aim' || !myTurn()) return;
   const m = $('weaponMenu'); m.textContent = '';
   WEAPONS.forEach((w, i) => {
-    const b = document.createElement('button'); b.className = 'wbtn'; b.id = 'w-' + w.id;
     const a = team().ammo[i];
+    if (a === 0 && team().weapon !== i) return;   // menü kalabalık: elde olmayan eşya görünmez
+    const b = document.createElement('button'); b.className = 'wbtn'; b.id = 'w-' + w.id;
     b.setAttribute('aria-pressed', String(team().weapon === i));
     b.disabled = weaponLocked(team(), i);
     const n = document.createElement('b'); n.textContent = w.name;
@@ -4010,7 +4283,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  spawnCrate, surfaceY, setTimer(v) { timer = v; },
+  spawnCrate, surfaceY, setTimer(v) { timer = v; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; },
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
