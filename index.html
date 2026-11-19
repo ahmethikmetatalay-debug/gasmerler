@@ -678,7 +678,10 @@ const Sound = (() => {
     sira: { u: 'sira-sende.mp3', o: 0.17, v: 1.9 },
     su: { u: 'su.mp3', o: 0.23, v: 0.85 },
     zipla: { u: 'ziplama.mp3', o: 0.25, v: 1.5 },
-    fart: { u: 'sfx-fart.mp3', v: 1 },   // sahte sandık; dosya yoksa sessiz geçer
+    fart: { u: 'osuruk.mp3', o: 0.15, v: 2.4 },               // sahte sandık
+    dirilme: { u: 'dirilme.mp3', o: 0.28, v: 3 },              // diriltme (akü bağlanınca başlar)
+    mezarKir: { u: 'mezar-kirilma.mp3', o: 0.2, v: 1.4 },      // mezar taşı kırılır
+    sprey: { u: 'sprey-jet.mp3', o: 0.15, son: 9.2, v: 1.9 },  // Sprey Jet: itki sürdükçe döngü, bırakınca kaldığı yerden devam
     muzik: { u: 'muzik-lobi.mp3', v: 0.45 },
     ortamHurda: { u: 'harita-ortam-hurda.mp3', v: 0.225, tembel: true },
     kablo: { u: 'harita-ortam-hurda-kablo-cizirtisi.mp3', v: 1.4, tembel: true, parca: [[0.1, 0.58], [1.42, 2.06], [2.9, 4.04]] },
@@ -721,6 +724,24 @@ const Sound = (() => {
     if (S.parca) { const p = S.parca[opt.parca ?? torba(k, S.parca.length)] || S.parca[0]; g.gain.value *= p[2] ?? 1; s.start(t, p[0], p[1] - p[0]); }
     else s.start(t, Math.max(0, opt.o ?? S.o ?? 0));
     return { stop(f = 0.12) { try { const n = ac.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(g.gain.value, n); g.gain.linearRampToValueAtTime(0, n + f); s.stop(n + f + 0.02); } catch (e) {} } };
+  }
+  // Sprey Jet: zıpla basılıyken çalar, bırakınca susar; tekrar basınca sesin kaldığı saniyeden devam eder
+  let spreySrc = null, spreyG = null, spreyPos = 0.15, spreyT0 = 0, spreyP0 = 0;
+  function sprey(acik) {
+    const S = SAMPLES.sprey;
+    if (acik) {
+      if (spreySrc || !on || !ac || ac.state !== 'running' || !sampleBuf.sprey) return;
+      const s = ac.createBufferSource(), g = ac.createGain(), n = ac.currentTime;
+      s.buffer = sampleBuf.sprey; s.loop = true; s.loopStart = S.o; s.loopEnd = S.son;
+      g.gain.setValueAtTime(0, n); g.gain.linearRampToValueAtTime(S.v, n + 0.04);
+      s.connect(g).connect(sfx); s.start(n, spreyPos); spreySrc = s; spreyG = g; spreyT0 = n; spreyP0 = spreyPos;
+    } else if (spreySrc) {
+      const n = ac.currentTime, L = S.son - S.o;
+      let pos = spreyP0 + (n - spreyT0); if (pos >= S.son) pos = S.o + ((pos - S.o) % L);
+      spreyPos = pos;
+      try { spreyG.gain.cancelScheduledValues(n); spreyG.gain.setValueAtTime(spreyG.gain.value, n); spreyG.gain.linearRampToValueAtTime(0, n + 0.05); spreySrc.stop(n + 0.06); } catch (e) {}
+      spreySrc = null;
+    }
   }
   // Harita ortam sesi: döngüde, müzikten bağımsız; null verilince susar
   function ortam(k) {
@@ -835,6 +856,7 @@ const Sound = (() => {
   }
   return {
     unlock, play, sample, jet, ortam, yukle, has: k => !!SAMPLES[k],
+    sprey, spreySifirla() { spreyPos = SAMPLES.sprey.o; }, get spreyHazir() { return !!(ac && sampleBuf.sprey); }, get spreyCaliyor() { return !!spreySrc; }, get spreyPos() { return spreyPos; },
     music(want) { musicWanted = want; if (ac) want ? startMusic() : stopMusic(); },
     get on() { return on; },
     toggle() {
@@ -1548,7 +1570,7 @@ function diril(g, kimden) {
   o._hp = DIRILT_HP;
   addPop(o.x, o.y - 52, 'DİRİLDİ!', '#9fe8ff');
   olay(kimden && kimden !== o ? [kim(kimden), ' ', { t: belirtme(kim(o).t), c: o.team.c }, ' diriltti'] : [kim(o), ' dirildi']);
-  sesYay('dirilt'); buzz(90);
+  buzz(90);
 }
 // Patlama mezar taşlarına da vurur (askerle aynı düşüş); canı biten taş kırılır
 function mezarHasar(x, y, r, dmg) {
@@ -1562,7 +1584,7 @@ function mezarHasar(x, y, r, dmg) {
   for (const g of kirik) { mezarKirFx(g.x, g.y); emit({ t: 'mk', x: r1(g.x), y: r1(g.y) }); }
 }
 function mezarKirFx(x, y) {
-  Sound.play('mezarKir');
+  Sound.sample('mezarKir') || Sound.play('mezarKir');
   for (let k = 0; k < 18; k++) { const a = -Math.PI * Math.random(), v = 60 + Math.random() * 200; parts.push({ kind: 'dirt', c: k % 3 ? '#b9b2c4' : '#8a8396', x: x + (Math.random() - 0.5) * 20, y: y - Math.random() * 30, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: G, size: 2.5 + Math.random() * 3.5, life: 1.1, max: 1.1 }); }
 }
 
@@ -1816,7 +1838,8 @@ function collect(c, u) {
       const msg = 'LİNK! ' + u.team.name + ' askerleri aynı hasarı alacak';
       showBanner(msg, '#ff4d5e'); emit({ t: 'bn', text: msg, c: '#ff4d5e', s: 'traitor' }); Sound.play('traitor'); buzz(120);   // hain olunca çalan ses
     }
-    else { addPop(u.x, y, 'Link (etkisiz)', '#ff4d5e'); olay([kim(u), ' ', { t: 'Link', c: '#ff4d5e' }, ' aldı (etkisiz)']); }
+    else { addPop(u.x, y, 'Link (etkisiz)', '#ff4d5e'); olay([kim(u), ' ', { t: 'Link', c: '#ff4d5e' }, ' aldı (etkisiz)']); sesYay('traitor'); }
+    return;   // link kötü bir şey: sandık açılma sesi çalmaz, yalnız kötü ses
   }
   Sound.play('sandik'); emit({ t: 'pk' });
 }
@@ -1842,7 +1865,7 @@ function fire(power) {
     if (!g) { if (t.ammo[wi] >= 0) t.ammo[wi]++; return; }
     const d = Math.sign(g.x - u.x) || u.facing; u.facing = d;
     addProj({ type: 'dirilt', x: u.x + d * 12, y: u.y, vx: r1(g.x), vy: r1(g.y - MZ_H * 0.55), fuse: DIRILT_SURE, g, age: 0 });
-    Sound.sample('kablo', { vol: 1.2 }) || Sound.play('traitor'); emit({ t: 'sf', n: 'kablo', v: 1.2 });
+    Sound.sample('dirilme') || Sound.play('dirilt'); emit({ t: 'sf', n: 'dirilme' });
     if (t.ammo[wi] === 0) t.weapon = 0;
     shotThisTurn = true; state = 'fly'; input.charging = false; input.power = 0; cam.free = false; return;   // diriltme turu bitirir
   }
@@ -2419,7 +2442,7 @@ function kabloZamani() {
 }
 function toastAll(text) { toast(text); emit({ t: 'toast', text }); }
 // Kodla üretilen bir sesi herkeste çalar
-const YAYIN_SES = new Set(['dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir']);
+const YAYIN_SES = new Set(['dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir', 'traitor']);
 function sesYay(n) { Sound.play(n); emit({ t: 'ps', n }); }
 function teamGone(t) {
   if (mode !== 'host' || !t || t.slot === undefined || t.slot === 0) return false;
@@ -4077,8 +4100,12 @@ function updateFx(dt) {
   if (jetItki && active && active.alive) {
     const f = active.facing, bx = active.x - f * 10, by = active.y - 10;
     for (let i = 0; i < 2; i++) parts.push({ kind: 'spark', c: YENI.SPREY_RENK[i] + '0.8)', x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 40, g: -20, size: 2 + Math.random() * 2.5, life: 0.22, max: 0.22 });
-    jetSesT -= dt; if (jetSesT <= 0) { jetSesT = 0.12; Sound.play('jet'); }
+    if (Sound.spreyHazir) Sound.sprey(true);
+    else { jetSesT -= dt; if (jetSesT <= 0) { jetSesT = 0.12; Sound.play('jet'); } }   // dosya yüklenmediyse kodla üretilen fıs
   }
+  if (!(jetItki && active && active.alive && inGameState())) Sound.sprey(false);
+  if (jetKul && !jetKulOnce) Sound.spreySifirla();   // yeni kutu: ses baştan
+  jetKulOnce = jetKul;
   kokular = kokular.filter(k => k.t < 1.2);
   if (asitSiddet() >= 1 && terr) for (let i = 0; i < 3; i++) {
     const { vw } = viewSize(), x = cam.x + (Math.random() - 0.5) * vw / cam.z, y = surfaceY(x);
@@ -4267,7 +4294,7 @@ function bantPaneli() {
 
 // ---- Sprey Jet: zıpla tuşu basılıyken itki, sağ/sol ile yön. Bir kullanım 3 sn yakıt; yere inince ya da yakıt bitince biter ----
 const JET_YAKIT = 3, JET_ITKI = 1.6, JET_VY = 220, JET_VX = 140, JET_AX = 420;
-let jetKul = false, jetYakit = 0, jetHavada = false, jetItki = false, jetSesT = 0;
+let jetKul = false, jetYakit = 0, jetHavada = false, jetItki = false, jetSesT = 0, jetKulOnce = false;
 function jetBas() {
   if (state !== 'aim' || !active || !active.alive || input.charging) return;
   const t = team(), wi = WI('jet');
