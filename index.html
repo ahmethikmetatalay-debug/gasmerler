@@ -225,6 +225,12 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 .stbl > .gal{color:#ffcb3d;font-weight:800}
 .istat{display:grid;gap:10px;max-height:calc(var(--app-h,100vh) - 150px);overflow:auto;padding-right:2px;touch-action:pan-y}
 .istat h3{margin:0;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.yama section{display:grid;gap:5px}
+.yama h3 b{color:var(--paper);font:16px var(--font-display);letter-spacing:0;text-transform:none;margin-right:6px}
+.yama ul{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+.yama li{display:grid;grid-template-columns:auto minmax(0,1fr);gap:8px;align-items:start;font-size:13px;line-height:1.35}
+.yama li i{font-style:normal;font-size:10px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;padding:2px 6px;border-radius:6px;margin-top:1px;min-width:64px;text-align:center}
+.yama li i.y{background:rgba(111,211,107,.18);color:#8fe36b}.yama li i.d{background:rgba(255,203,61,.16);color:#ffcb3d}.yama li i.k{background:rgba(255,77,94,.16);color:#ff6b78}
 .maclar{display:grid;gap:4px;font-size:12px;color:var(--muted)}
 .maclar div{display:flex;justify-content:space-between;gap:10px}
 .maclar b{color:var(--paper)}
@@ -374,6 +380,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         <p class="status" id="homeStatus"></p>
         <button class="link" id="localBtn">Aynı telefonda sırayla oyna</button>
         <button class="link" id="statsBtn">İstatistikler</button>
+        <button class="link" id="notlarBtn">Yama notları</button>
         </div>
         <div class="lcol lc3">
         <p class="lead">Sırayla nişan al, araziyi patlatarak oy, rakip timleri suya dök. Ayakta kalan son tim kazanır. 6 kişiye kadar, herkes kendi telefonundan oynar.</p>
@@ -437,6 +444,16 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         <button class="go" id="lobbyStart" hidden>Savaşı başlat</button>
         <button class="go" id="rejoinBtn" hidden>Maça geri dön</button>
         <p class="status" id="lobbyStatus"></p>
+        </div>
+      </section>
+
+      <section class="view" id="vNotlar" hidden>
+        <div class="lcol lc1">
+        <p class="lead">Her sürümde nelerin eklendiği, değiştiği ve kaldırıldığı. En yeni sürüm en üstte.</p>
+        <p class="status" id="surumTxt"></p>
+        </div>
+        <div class="lcol lc3">
+        <div class="istat yama" id="notlarBox"></div>
         </div>
       </section>
 
@@ -1450,6 +1467,121 @@ function buildAwards() {
 }
 function hucre(tbl, txt, cls) { const e = document.createElement('span'); if (cls) e.className = cls; e.textContent = String(txt); tbl.appendChild(e); return e; }
 const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkansiz | 0];
+
+// ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
+const YAMA = [
+  ['18.1', '20 Kasım 2026', [
+    ['y', 'Ana menüde Yama notları'],
+    ['y', 'Yeni sesler: sahte sandıkta osuruk, diriltme, mezar taşının kırılması'],
+    ['y', 'Sprey Jet sesi: zıpla basılıyken çalar, bırakınca susar, tekrar basınca kaldığı yerden devam eder'],
+    ['y', 'Kaos Turu boyunca düdük sesi çalar'],
+    ['d', 'Asit yağmuru engebeleri düzleştirir: tepeler çevredeki çukurların seviyesine doğru erir, bir yağışta en çok 100 px'],
+    ['d', 'Diriltmeden sonra aynı turda atış yapılabilir'],
+    ['d', 'Sandık oranları: sahte sandık %9, can %14,5, silah %17; en nadir eşya düdük (%4,8)'],
+    ['d', 'Sandıktan link çıkınca sandık sesi çalmaz, yalnız kötü ses gelir'],
+    ['d', 'Sahte sandıkta sandık açılma sesi çalmaz'],
+  ]],
+  ['18', '19 Kasım 2026', [
+    ['y', 'Büyük mezar taşı: siper olur, 40 canı var, patlamayla çatlar ve kırılır'],
+    ['y', 'Diriltme: mezarın dibinde akü ve kabloyla ölen asker 30 canla döner (asker başına bir kez)'],
+    ['y', 'İmkânsız Atış: portaldan geçen mermi düşmana vurursa dev afiş'],
+    ['y', 'Sahte sandık: içinden hiçbir şey çıkmaz'],
+    ['y', 'Ayı Kapanı: maç başına 2 tane, basan 10 hasar alır ve sırası biter, zıplayarak geçilir'],
+    ['y', 'Sprey Jet: zıpla tuşunu basılı tutup uç, 3 sn yakıt'],
+    ['y', 'Koli Bandı: Roketli Ördek ve Misketli Ördek tarifleri'],
+    ['y', 'Asit Yağmuru: 3 tur kimse hasar almazsa gelir, açıktaki toprağı eritir, açıktaki askerlere 5-10 hasar'],
+    ['y', 'Kaos Turu: düdük çalınınca sonraki turda herkes aynı anda ateş eder'],
+    ['d', 'Elde olmayan eşyalar silah menüsünde görünmez'],
+    ['d', 'Sandığa yeni eşyalar eklendi: Sprey Jet, Koli Bandı, Diriltme, Düdük, sahte sandık'],
+  ]],
+  ['17', '25 Ekim 2026', [
+    ['y', 'Açılış ekranı'],
+    ['y', 'İstatistikler: maç sonu tablosu ve ana menüde maç geçmişi'],
+    ['y', 'Takım listesinde bağlantı kalitesi noktası'],
+    ['y', 'Oda sahibi uygulamadan çıkınca herkese bekleme yazısı'],
+    ['d', 'Donmalar azaltıldı: oyun kareleri ayrı, beklemesiz kanaldan gider'],
+  ]],
+  ['16', '25 Ekim 2026', [
+    ['y', 'Bas konuş sesli sohbet: lobide ve oyunda düğme, bilgisayarda V tuşu, kim konuşuyor göstergesi'],
+  ]],
+  ['15', '25 Ekim 2026', [
+    ['y', 'Sağ üstte olay akışı: kim hangi sandığı aldı, kim kimi öldürdü'],
+    ['d', 'Elektrik artık gizli bubi tuzağı: her maçta rastgele yerde, çarpınca yer değiştirir'],
+    ['d', 'Patlama oyukları tamamen boşalır (eski arazinin soluk izi kalmaz)'],
+    ['k', 'Elektrik kaçaklarının ekranda görünen işareti kaldırıldı'],
+  ]],
+  ['14', '24 Ekim 2026', [
+    ['y', 'Hurda Gezegeni yeni arazi, rastgele ayna harita, topraktan çıkan elektrik'],
+    ['d', 'Altın sandığın rafında kimse doğmaz'],
+    ['k', 'Hurda Gezegeni\'nin ayrı mağara katmanı kaldırıldı'],
+  ]],
+  ['13', '24 Ekim 2026', [
+    ['y', 'Gerçek ses kayıtları: bazuka, patlamalar, F-16, acı sesleri, lobi müziği, Hurda ortam sesi'],
+    ['y', 'Yürüme sesi; son 5 saniyede geri sayım'],
+    ['y', 'Geri ok tuşları; misafir maça geri dönebilir'],
+    ['y', 'Link alan askerin etrafında kırmızı hare'],
+    ['d', 'Oyun ekrana sığdırıldı: bazı Android telefonlarda alttaki düğmeler görünmüyordu'],
+    ['k', 'Kürek, sandık ve seke ses dosyaları kaldırıldı, kodla üretilen seslere dönüldü'],
+  ]],
+  ['12', '23 Ekim 2026', [
+    ['y', 'Hurda Gezegeni\'nde mağarada doğma, tam harita görünümü'],
+    ['d', 'Altın sandık sabit yerde'],
+  ]],
+  ['11', '23 Ekim 2026', [
+    ['y', 'Takımlı modda 2 ya da 3 takım (Yeşil Takım)'],
+  ]],
+  ['10', '23 Ekim 2026', [
+    ['y', 'Hurda Gezegeni haritası ve lobide harita seçimi'],
+  ]],
+  ['9', '22 Ekim 2026', [
+    ['y', 'Gömülü altın sandık ve Hele İki Gözüm hava desteği (F-16)'],
+    ['y', 'Kement: sandığı iple çeker, rakibi kırbaçlar'],
+    ['d', 'Yürüme %10 kısa, bazuka fırlatması %25 az; herkes 1 kementle başlar'],
+    ['d', 'Sandıklar havada asılı adacıklara inmez'],
+  ]],
+  ['8', '22 Ekim 2026', [
+    ['y', 'Oyunun adı Gaşmerler: yeni karakter, hurda silahlar, Plastik Evrim Gezegeni, yeni logo'],
+  ]],
+  ['7', '20 Ekim 2026', [
+    ['d', 'Kürek turda bir kez, kazdıktan sonra tek atış; kalkanlı asker fırlamaz; yumruk sekmez'],
+  ]],
+  ['6', '20 Ekim 2026', [
+    ['y', 'Yumruk; sürpriz sandık (kalkan, link, kürek, tuzak); 6 kişilik lobi'],
+    ['d', 'Askerler %25 büyük'],
+  ]],
+  ['5', '20 Ekim 2026', [
+    ['y', 'Takımlı mod (2v2), lobide isim değiştirme, askerin üstünde oyuncu adı'],
+  ]],
+  ['4', '20 Ekim 2026', [
+    ['d', 'Portal tabancası güce göre atılır ve yerçekimiyle düşer'],
+    ['k', 'Dikey/Yatay portal seçeneği kaldırıldı'],
+  ]],
+  ['3', '20 Ekim 2026', [
+    ['y', 'Kara delik; portallar kalıcı'],
+    ['d', 'Portal döngü hatası düzeltildi'],
+  ]],
+  ['2', '20 Ekim 2026', [
+    ['y', 'Telefona uygulama gibi kurulum, sandıklar, portal tabancası, dost ateşi, ses ve müzik, iki parmakla yakınlaştırma, MVP ödülü'],
+  ]],
+  ['1', '20 Ekim 2026', [
+    ['y', 'İlk online sürüm (adı o zaman Çamur Cephesi)'],
+  ]],
+];
+const ETIKET = { y: 'Yeni', d: 'Değişti', k: 'Kaldırıldı' };
+function notlarCiz() {
+  const box = $('notlarBox'); box.textContent = '';
+  $('surumTxt').textContent = 'Şu anki sürüm: v' + YAMA[0][0];
+  for (const [v, tarih, liste] of YAMA) {
+    const sec = document.createElement('section'), h = document.createElement('h3'), b = document.createElement('b');
+    b.textContent = 'v' + v; h.append(b, tarih); sec.appendChild(h);
+    const ul = document.createElement('ul');
+    for (const [tur, metin] of liste) {
+      const li = document.createElement('li'), i = document.createElement('i'), sp = document.createElement('span');
+      i.className = tur; i.textContent = ETIKET[tur]; sp.textContent = metin; li.append(i, sp); ul.appendChild(li);
+    }
+    sec.appendChild(ul); box.appendChild(sec);
+  }
+}
 
 // ---- İstatistik kaydı: her telefon oynadığı online maçları kendi hafızasında tutar (son 100 maç) ----
 const MAC_ANAHTAR = 'gasmer-maclar';
@@ -4569,8 +4701,9 @@ addEventListener('blur', () => { for (const k in KEYS) act('k', { k, v: false })
 
 // ---- Menü ----
 function showView(id) {
-  for (const v of ['vHome', 'vJoin', 'vLobby', 'vLocal', 'vStats']) $(v).hidden = v !== id;
+  for (const v of ['vHome', 'vJoin', 'vLobby', 'vLocal', 'vStats', 'vNotlar']) $(v).hidden = v !== id;
   if (id === 'vStats') istatistikCiz();
+  if (id === 'vNotlar') notlarCiz();
   $('nameField').hidden = !(id === 'vHome' || id === 'vJoin');
   $('backBtn').hidden = id === 'vHome';
   if (id === 'vLobby') buildWormInputs();
@@ -4778,13 +4911,14 @@ $('lhHurda').addEventListener('click', () => setLobbyHarita('hurda'));
 $('leaveBtn').addEventListener('click', leaveRoom);
 // Menüdeki geri ok: bulunulan ekrana göre bir önceki ekrana
 $('statsBtn').addEventListener('click', () => showView('vStats'));
+$('notlarBtn').addEventListener('click', () => showView('vNotlar'));
 $('statsReset').addEventListener('click', () => {
   if (!maclariOku().length || !confirm('Bu telefondaki bütün maç kayıtları silinsin mi?')) return;
   try { localStorage.removeItem(MAC_ANAHTAR); } catch (e) {} istatistikCiz();
 });
 $('backBtn').addEventListener('click', () => {
   if (!$('vJoin').hidden) $('joinBack').click();
-  else if (!$('vLocal').hidden || !$('vStats').hidden) showView('vHome');
+  else if (!$('vLocal').hidden || !$('vStats').hidden || !$('vNotlar').hidden) showView('vHome');
   else if (!$('vLobby').hidden) {
     if (mode === 'host' && players.length > 1 && !confirm('Oda kapanacak, herkes çıkacak. Ana ekrana dönülsün mü?')) return;
     leaveRoom();
