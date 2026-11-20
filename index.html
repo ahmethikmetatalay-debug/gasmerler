@@ -697,10 +697,10 @@ const Sound = (() => {
     dirilme: { u: 'dirilme.mp3', o: 0.28, v: 3 },              // diriltme (akü bağlanınca başlar)
     mezarKir: { u: 'mezar-kirilma.mp3', o: 0.2, v: 1.4 },      // mezar taşı kırılır
     sprey: { u: 'sprey-jet.mp3', o: 0.15, son: 9.2, v: 1.9 },
-    duduk: { u: 'duduk.mp3', o: 0.94, son: 7.55, v: 4 },          // Kaos Turu boyunca döngüde
+    duduk: { u: 'duduk.mp3', o: 0.94, son: 7.55, v: 2 },          // Kaos Turu boyunca döngüde (kullanıcı isteğiyle %50 kısık)
     guc: { u: 'guc-tusu.mp3', v: 1.7 },                           // ATEŞ basılı tutulup güç toplanırken; bırakınca kesilir  // Sprey Jet: itki sürdükçe döngü, bırakınca kaldığı yerden devam
     muzik: { u: 'muzik-lobi.mp3', v: 0.45 },
-    ortamHurda: { u: 'harita-ortam-hurda.mp3', v: 0.225, tembel: true },
+    ortamHurda: { u: 'harita-ortam-hurda.mp3', v: 0.056, tembel: true },   // arka plan uğultusu (kullanıcı isteğiyle %75 kısık; önce 0.225)
     kablo: { u: 'harita-ortam-hurda-kablo-cizirtisi.mp3', v: 1.4, tembel: true, parca: [[0.1, 0.58], [1.42, 2.06], [2.9, 4.04]] },
   };
   const sampleRaw = {}, sampleBuf = {}, istendi = {}, torbalar = {};
@@ -1488,6 +1488,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['22.2', '20 Kasım 2026', [
+    ['d', 'Kaos Turu alarm sesi %50 kısık'],
+    ['d', 'Hurda Gezegeni arka plan uğultusu %75 kısık'],
+  ]],
   ['22.1', '20 Kasım 2026', [
     ['y', 'Güç toplama sesi: ATEŞ basılı tutulurken çalar, bırakınca kesilir (Kaos Turu\'nda yalnız kendi güç toplamanı duyarsın)'],
   ]],
