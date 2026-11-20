@@ -610,7 +610,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v18-';
+const ID_PREFIX = 'gasmerler-v19-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1470,6 +1470,11 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['19', '20 Kasım 2026', [
+    ['d', '6 kişilik maçta asit yağmuru gelince oyunun donup herkesin kopması düzeltildi: büyük haritada erime bilgisi tek mesaja sığmıyordu, artık parçalanarak gider'],
+    ['d', 'Uzun maçta oyundan çıkıp geri dönen oyuncu haritayı yine doğru alır (aynı sorun)'],
+    ['d', 'Tek bir mesaj hatası yüzünden oyuncular kopmuş sayılmaz'],
+  ]],
   ['18.1', '20 Kasım 2026', [
     ['y', 'Ana menüde Yama notları'],
     ['y', 'Yeni sesler: sahte sandıkta osuruk, diriltme, mezar taşının kırılması'],
@@ -2578,7 +2583,31 @@ function punishTraitor() {
 
 // ---- Ağ: host tarafı ----
 function makeCode() { let s = ''; for (let i = 0; i < 4; i++) s += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)]; return s; }
-function send(conn, msg) { if (conn && conn.open) try { conn.send(msg); } catch (e) {} }
+// PeerJS JSON kanalı tek mesajda en çok ~16 KB taşır; büyüğünü reddedip hata verir (6 kişilik haritada asit erimesi,
+// uzun maçta sonradan katılana giden arazi kaydı bunu aşıyordu). Büyük mesajlar parçalanır, karşı taraf birleştirir.
+const PARCA = 5000;   // karakter; Türkçe harf ve kaçış karakterleriyle bile 16 KB'ın çok altında kalır
+let parcaNo = 0;
+function send(conn, msg) {
+  if (!conn || !conn.open) return;
+  try {
+    const s = JSON.stringify(msg);
+    if (s.length <= PARCA) { conn.send(msg); return; }
+    const id = ++parcaNo, n = Math.ceil(s.length / PARCA);
+    for (let i = 0; i < n; i++) conn.send({ t: 'pc', id, i, n, s: s.slice(i * PARCA, (i + 1) * PARCA) });
+  } catch (e) {}
+}
+const parcalar = new Map();   // id → { n, gelen, p: [] }
+function parcaBirlestir(m) {
+  const id = m.id | 0, n = m.n | 0, i = m.i | 0;
+  if (n < 1 || n > 400 || i < 0 || i >= n || typeof m.s !== 'string') return null;
+  let k = parcalar.get(id);
+  if (!k) { k = { n, gelen: 0, p: new Array(n), t: performance.now() }; parcalar.set(id, k); }
+  if (k.p[i] === undefined) { k.p[i] = m.s; k.gelen++; }
+  for (const [eid, e] of parcalar) if (performance.now() - e.t > 30000) parcalar.delete(eid);   // yarım kalanları at
+  if (k.gelen < k.n) return null;
+  parcalar.delete(id);
+  try { return JSON.parse(k.p.join('')); } catch (e) { return null; }
+}
 function broadcast(msg) { for (const p of players) send(p.conn, msg); }
 function emit(msg) { if (mode === 'host') broadcast(msg); }
 // Yalnızca host'ta olan bir olayın dosya sesi: kendi ekranında çalar, misafirlere de yollar
@@ -2644,7 +2673,7 @@ function openHostPeer() {
     conn.lastSeen = performance.now();
     conn.on('data', m => { conn.lastSeen = performance.now(); if (peer === p) onHostData(conn, m); });
     conn.on('close', () => onPeerLeft(conn));
-    conn.on('error', () => onPeerLeft(conn));
+    conn.on('error', () => { if (!conn.open) onPeerLeft(conn); });
   });
   // Eşleştirme sunucusundan kopmak açık bağlantıları bozmaz, sadece yeni katılımı engeller: yeniden bağlan
   p.on('disconnected', () => { if (peer === p && !p.destroyed) setTimeout(() => { if (peer === p && !p.destroyed) try { p.reconnect(); } catch (e) {} }, 1500); });
@@ -2772,7 +2801,7 @@ function joinRoom() {
       joined = true; c.send({ t: 'hello', name: myName(), wn: myWorms });
       clearInterval(pingTimer); pingTimer = setInterval(() => send(c, { t: 'ping', c: performance.now(), r: benimRtt }), 1500);
       const h = p.connect(ID_PREFIX + code, { reliable: false, serialization: 'json', label: 'hiz' });
-      h.on('data', m => { if (hostConn === c && m && m.t === 's') onClientData(m); });
+      h.on('data', m => { if (hostConn === c && m && (m.t === 's' || m.t === 'pc')) onClientData(m); });
     });
     c.on('data', m => { if (hostConn === c) onClientData(m); });
     c.on('close', () => { if (hostConn === c) hostLost(); });
@@ -2799,6 +2828,7 @@ function hostLost() {
 
 function onClientData(m) {
   if (!m || typeof m !== 'object') return;
+  if (m.t === 'pc') { const b = parcaBirlestir(m); if (b && b.t !== 'pc') onClientData(b); return; }
   switch (m.t) {
     case 'lobby':
       players = Array.isArray(m.players) ? m.players.slice(0, MAX_PLAYERS).map(p => ({ name: String(p.name).slice(0, 14), slot: p.slot | 0, side: sideNo(p.side) })) : [];
@@ -5023,7 +5053,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
+  get players() { return players; }, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
