@@ -697,7 +697,8 @@ const Sound = (() => {
     dirilme: { u: 'dirilme.mp3', o: 0.28, v: 3 },              // diriltme (akü bağlanınca başlar)
     mezarKir: { u: 'mezar-kirilma.mp3', o: 0.2, v: 1.4 },      // mezar taşı kırılır
     sprey: { u: 'sprey-jet.mp3', o: 0.15, son: 9.2, v: 1.9 },
-    duduk: { u: 'duduk.mp3', o: 0.94, son: 7.55, v: 4 },          // Kaos Turu boyunca döngüde  // Sprey Jet: itki sürdükçe döngü, bırakınca kaldığı yerden devam
+    duduk: { u: 'duduk.mp3', o: 0.94, son: 7.55, v: 4 },          // Kaos Turu boyunca döngüde
+    guc: { u: 'guc-tusu.mp3', v: 1.7 },                           // ATEŞ basılı tutulup güç toplanırken; bırakınca kesilir  // Sprey Jet: itki sürdükçe döngü, bırakınca kaldığı yerden devam
     muzik: { u: 'muzik-lobi.mp3', v: 0.45 },
     ortamHurda: { u: 'harita-ortam-hurda.mp3', v: 0.225, tembel: true },
     kablo: { u: 'harita-ortam-hurda-kablo-cizirtisi.mp3', v: 1.4, tembel: true, parca: [[0.1, 0.58], [1.42, 2.06], [2.9, 4.04]] },
@@ -773,6 +774,19 @@ const Sound = (() => {
       const n = ac.currentTime;
       try { d.g.gain.cancelScheduledValues(n); d.g.gain.setValueAtTime(d.g.gain.value, n); d.g.gain.linearRampToValueAtTime(0, n + 0.3); d.s.stop(n + 0.35); } catch (e) {}
       delete donguler[k];
+    }
+  }
+  // Bir kez çalan, istenince yarıda kesilen dosya sesi (güç toplama): acik true olunca baştan başlar, false olunca söner
+  const tekler = {};
+  function tek(k, acik) {
+    const S = SAMPLES[k];
+    if (acik) {
+      if (tekler[k] || !on || !ac || ac.state !== 'running' || !sampleBuf[k]) return;
+      const s = ac.createBufferSource(), g = ac.createGain(); g.gain.value = S.v ?? 1;
+      s.buffer = sampleBuf[k]; s.connect(g).connect(sfx); s.start(ac.currentTime, S.o || 0); tekler[k] = { s, g };
+    } else if (tekler[k]) {
+      const d = tekler[k], n = ac.currentTime; delete tekler[k];
+      try { d.g.gain.cancelScheduledValues(n); d.g.gain.setValueAtTime(d.g.gain.value, n); d.g.gain.linearRampToValueAtTime(0, n + 0.04); d.s.stop(n + 0.05); } catch (e) {}
     }
   }
   // Harita ortam sesi: döngüde, müzikten bağımsız; null verilince susar
@@ -888,7 +902,7 @@ const Sound = (() => {
   }
   return {
     unlock, play, sample, jet, ortam, yukle, has: k => !!SAMPLES[k],
-    dongu, dongu_caliyor: k => !!donguler[k], sprey, spreySifirla() { spreyPos = SAMPLES.sprey.o; }, get spreyHazir() { return !!(ac && sampleBuf.sprey); }, get spreyCaliyor() { return !!spreySrc; }, get spreyPos() { return spreyPos; },
+    dongu, dongu_caliyor: k => !!donguler[k], tek, tek_caliyor: k => !!tekler[k], sprey, spreySifirla() { spreyPos = SAMPLES.sprey.o; }, get spreyHazir() { return !!(ac && sampleBuf.sprey); }, get spreyCaliyor() { return !!spreySrc; }, get spreyPos() { return spreyPos; },
     music(want) { musicWanted = want; if (ac) want ? startMusic() : stopMusic(); },
     get on() { return on; },
     toggle() {
@@ -1474,6 +1488,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['22.1', '20 Kasım 2026', [
+    ['y', 'Güç toplama sesi: ATEŞ basılı tutulurken çalar, bırakınca kesilir (Kaos Turu\'nda yalnız kendi güç toplamanı duyarsın)'],
+  ]],
   ['22', '20 Kasım 2026', [
     ['d', 'Kaos Turu: herkesin hamlesi gizli. Yürüme, zıplama, jetle uçma ve kürek tüneli başkalarına görünmez; atışlar çıkınca herkes her şeyi aynı anda görür'],
     ['d', 'Kaos Turu: iki portal atılabilir (ilk atış kaydedilir, ikincisini nişanlarsın; atışta ikisi birden açılır)'],
@@ -4444,6 +4461,9 @@ function updateFx(dt) {
     else { jetSesT -= dt; if (jetSesT <= 0) { jetSesT = 0.12; Sound.play('jet'); } }   // dosya yüklenmediyse kodla üretilen fıs
   } else Sound.sprey(false);
   Sound.dongu('duduk', kaosTur && inGameState());   // düdük sesi Kaos Turu bitene kadar döner
+  // Güç toplama sesi: normal turda sıradakinin, Kaos Turu'nda yalnız kendi güç toplaman (başkasınınki ele verirdi)
+  const kg = state === 'kaos' ? benimKaos() : null;
+  Sound.tek('guc', state === 'aim' ? !!input.charging : !!(kg && !kg.hazir && kc(kg)));
   if (jetKul && !jetKulOnce) Sound.spreySifirla();   // yeni kutu: ses baştan
   jetKulOnce = jetKul;
   kokular = kokular.filter(k => k.t < 1.2);
