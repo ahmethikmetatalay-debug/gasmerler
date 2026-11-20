@@ -963,12 +963,24 @@ function mezarIci(x, y, haric) {
   return false;
 }
 // ---- Barikat: inşaat demiri. Uzunluğu BARIKAT_L, kalınlığı BARIKAT_K; orta noktası (x, y), açısı a
-const BARIKAT_L = 84, BARIKAT_K = 7, BARIKAT_VURUS = 3;
+const BARIKAT_L = 59, BARIKAT_K = 7, BARIKAT_VURUS = 3;   // %30 kısaltıldı (84 → 59)
 let barikatlar = [];
 function barikatUzak(b, x, y) {   // noktanın demir eksenine uzaklığı
   const c = Math.cos(b.a), sn = Math.sin(b.a), dx = x - b.x, dy = y - b.y;
   const t = clamp(dx * c + dy * sn, -BARIKAT_L / 2, BARIKAT_L / 2);
   return Math.hypot(dx - t * c, dy - t * sn);
+}
+// Patlama noktasından askere giden çizgi bir barikatın eksenini kesiyor mu (barikat siperdir)
+function barikatKapatir(px, py, qx, qy) {
+  const kes = (ax, ay, bx, by, cx, cy, dx, dy) => {
+    const o = (x1, y1, x2, y2, x3, y3) => Math.sign((x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1));
+    return o(ax, ay, bx, by, cx, cy) !== o(ax, ay, bx, by, dx, dy) && o(cx, cy, dx, dy, ax, ay) !== o(cx, cy, dx, dy, bx, by);
+  };
+  for (const b of barikatlar) {
+    const c = Math.cos(b.a) * BARIKAT_L / 2, sn = Math.sin(b.a) * BARIKAT_L / 2;
+    if (kes(px, py, qx, qy, b.x - c, b.y - sn, b.x + c, b.y + sn)) return true;
+  }
+  return false;
 }
 function barikatIci(x, y) { for (const b of barikatlar) if (barikatUzak(b, x, y) <= BARIKAT_K / 2) return true; return false; }
 const araziKati = (x, y) => { x |= 0; y |= 0; return x >= 0 && x < W && y >= 0 && y < H && solid[y * W + x] === 1; };
@@ -1410,7 +1422,7 @@ function nextTurn() {
   if (t.ammo[t.weapon] === 0) t.weapon = 0;
   wind = Math.round((rng() * 2 - 1) * 10) / 10;
   timer = TURN_TIME; state = 'aim'; walkAcc = 0; moveLeft = MOVE_MAX; portalPending = 0; portalReturn = false; ffTurn = 0;
-  digLeft = DIG_MAX; digging = false; digAcc = 0; jetKul = false; jetItki = false; jetYakit = 0; jetHavada = false;
+  digLeft = DIG_MAX; digging = false; digAcc = 0; jetKul = false; jetItki = false; jetYakit = 0; jetHavada = false; kacis = false;
   shotThisTurn = false; airTarget = null;
   input.charging = false; input.power = 0;
   input.left = input.right = input.up = input.down = input.jet = false;
@@ -1510,6 +1522,12 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['23.1', '21 Kasım 2026', [
+    ['d', 'Barikat siperdir: ona çarpan patlama arkasındaki askere hasar vermez'],
+    ['d', 'Barikat toprağın içine, mezarın ya da başka barikatın üstüne kurulamaz; kurulamayacak yerde önizleme kırmızı'],
+    ['d', 'Barikat %30 kısaldı'],
+    ['d', 'Dinamit bırakınca tur bitmez: patlayana kadar kaçabilirsin (yürü, zıpla, jet); patlayınca tur biter'],
+  ]],
   ['23', '21 Kasım 2026', [
     ['y', 'Dinamit: herkese 2 tane. Önüne bırakılır, 4 saniyede büyük patlama'],
     ['y', 'Barikat: herkese 2 tane. İnşaat demiri; haritada istediğin yere dokun, sağ/sol ile döndür, KUR. Havada durur, katıdır. İlk vuruş iz bırakmaz, ikincide eğilir, üçüncüde kopar'],
@@ -1843,10 +1861,21 @@ function barikatKirFx(x, y) {
 }
 // Kurulacak barikatın yeri: takım başına (Kaos Turu'nda da her oyuncunun kendi)
 function barikatHayal(t, u) { if (!t.barG) t.barG = { x: clamp(u.x + u.facing * 60, 20, W - 20), y: u.y - 40, a: 0 }; return t.barG; }
+// Barikat kurulabilir mi: toprağa, mezara, başka barikata, askerin üstüne ya da suya değmemeli
+function barikatEngel(g) {
+  if (g.y > WATER - 4 || g.y < -200) return 'Buraya barikat kurulamaz';
+  if (units.some(o => o.alive && barikatUzak(g, o.x, o.y - UNIT_H / 2) < UNIT_H / 2 + 4)) return 'Barikat askerin üstüne kurulamaz';
+  const c = Math.cos(g.a), sn = Math.sin(g.a);
+  for (let t = -BARIKAT_L / 2; t <= BARIKAT_L / 2; t += 2) for (const k of [-BARIKAT_K / 2, 0, BARIKAT_K / 2]) {
+    const x = g.x + t * c - k * sn, y = g.y + t * sn + k * c;
+    if (araziKati(x, y)) return 'Barikat toprağın içine kurulamaz';
+    if ((graves.length && mezarIci(x | 0, y | 0, null)) || barikatlar.some(b => barikatUzak(b, x, y) <= BARIKAT_K / 2)) return 'Burada başka bir şey var';
+  }
+  return null;
+}
 function barikatKur(u, t) {
-  const g = barikatHayal(t, u);
-  if (units.some(o => o.alive && barikatUzak(g, o.x, o.y - UNIT_H / 2) < UNIT_H / 2 + 4)) { uyari('Barikat askerin üstüne kurulamaz'); return false; }
-  if (g.y > WATER - 4 || g.y < -200) { uyari('Buraya barikat kurulamaz'); return false; }
+  const g = barikatHayal(t, u), engel = barikatEngel(g);
+  if (engel) { uyari(engel); return false; }
   barikatlar.push({ x: g.x, y: g.y, a: g.a, vurus: 0 });
   t.barG = null; sesYay('kapanKur');
   return true;
@@ -1855,10 +1884,11 @@ function barikatCiz(b, hayal, c = ctx) {
   c.save(); c.translate(b.x, b.y); c.rotate(b.a);
   const L = BARIKAT_L, K = BARIKAT_K, egik = (b.vurus || 0) >= 2;
   if (hayal) c.globalAlpha = 0.5;
+  const kirmizi = hayal && barikatEngel(b);
   c.lineCap = 'round';
   c.strokeStyle = '#060303'; c.lineWidth = K + 2;
   c.beginPath(); c.moveTo(-L / 2, 0); egik ? c.quadraticCurveTo(0, 5, L / 2, 0) : c.lineTo(L / 2, 0); c.stroke();
-  c.strokeStyle = egik ? '#8a5a3c' : '#6b6f78'; c.lineWidth = K;
+  c.strokeStyle = kirmizi ? '#e23b2b' : egik ? '#8a5a3c' : '#6b6f78'; c.lineWidth = K;
   c.beginPath(); c.moveTo(-L / 2, 0); egik ? c.quadraticCurveTo(0, 5, L / 2, 0) : c.lineTo(L / 2, 0); c.stroke();
   // nervürler (inşaat demirinin çapraz dişleri)
   c.strokeStyle = egik ? 'rgba(60,30,20,.7)' : 'rgba(6,3,3,.55)'; c.lineWidth = 1.1;
@@ -2235,6 +2265,7 @@ function fire(power) {
   } else mermiAt(u, w, power);
   if (w !== 'portal' && t.ammo[wi] === 0) t.weapon = 0;
   atesSesi(w); emit({ t: 'fi', w });
+  if (w === 'dynamite' && !kaosYedek) { kacis = true; input.charging = false; input.power = 0; cam.free = false; return; }   // kaçış: tur dinamit patlayınca biter
   state = 'fly'; input.charging = false; input.power = 0; cam.free = false;
 }
 
@@ -2573,6 +2604,7 @@ function explode(x, y, r, dmg, kb = 1, ses, kaynak) {
     const cx = u.x, cy = u.y - UNIT_H / 2, d = Math.hypot(cx - x, cy - y), R = r * 1.5;
     if (d >= R) continue;
     const f = 1 - d / R;
+    if (barikatlar.length && barikatKapatir(x, y, cx, cy)) continue;   // barikatın arkasındaki asker korunur
     if (hurt(u, Math.round(dmg * (0.35 + 0.65 * f)))) continue;   // kalkan yuttu: fırlatma yok
     if (kaynak && kaynak.portalli && (atan || active) && u.team.side !== (atan || active).team.side) imkansizAtis((atan || active).team);
     const nx = (cx - x) / (d || 1), ny = (cy - y) / (d || 1), imp = 80 + 520 * f;
@@ -2759,6 +2791,7 @@ function step() {
   if (graves.some(g => g.dead)) graves = graves.filter(g => !g.dead);
 
   if (state === 'aim' && (!active.alive || active.hp <= 0)) endTurn();
+  else if (state === 'aim' && kacis && !projs.some(p => p.type === 'dynamite')) endTurn();   // dinamit patladı: tur biter
   if (state === 'fly' && projs.length === 0) {
     if (portalReturn && active.alive) { state = 'aim'; portalReturn = false; }   // portal atışı turu bitirmez
     else endTurn();
@@ -3011,7 +3044,7 @@ function snapshot() {
     ch: input.charging ? 1 : 0, pw: r2(input.power), ml: moveLeft, pp: portalPending,
     wp: teams.map(t => t.weapon), am: teams.map(t => t.ammo),
     u: units.map(u => [r1(u.x), r1(u.y), u.hp, u.alive ? 1 : 0, u.facing, r2(u.aim), u.traitor ? 1 : 0, u.link ? 1 : 0]),
-    dl: digLeft, dg: digging ? 1 : 0, jt: [jetKul ? 1 : 0, r2(jetYakit), jetItki ? 1 : 0], at: airTarget ? [r1(airTarget.x), r1(airTarget.y)] : 0, sw: shotThisTurn ? 1 : 0,
+    dl: digLeft, dg: digging ? 1 : 0, jt: [jetKul ? 1 : 0, r2(jetYakit), jetItki ? 1 : 0, kacis ? 1 : 0], at: airTarget ? [r1(airTarget.x), r1(airTarget.y)] : 0, sw: shotThisTurn ? 1 : 0,
     p: projs.map(p => [p.id, p.type, r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.fuse !== undefined ? r2(p.fuse) : -1, p.type === 'pshot' ? p.slot : (p.dir || 0), p.grounded ? 1 : 0, p.atan ?? -1]),
     g: graves.map(g => [r1(g.x), r1(g.y), g.ti, g.hp, g.ui]),
     ad: asitDurum === 'uyari' ? 1 : asitDurum === 'yagis' ? 2 : 0, ko: kaosSnap(),
@@ -3133,7 +3166,7 @@ function applySnap(s) {
   if (state === 'over') return;
   state = s.st; turnTeam = s.tt | 0; active = units[s.ai] || null;
   digLeft = +s.dl || 0; digging = !!s.dg; shotThisTurn = !!s.sw;
-  if (Array.isArray(s.jt)) { jetKul = !!s.jt[0]; jetYakit = +s.jt[1] || 0; jetItki = !!s.jt[2]; }
+  if (Array.isArray(s.jt)) { jetKul = !!s.jt[0]; jetYakit = +s.jt[1] || 0; jetItki = !!s.jt[2]; kacis = !!s.jt[3]; }
   // Hedefi kendisi işaretleyen oyuncunun ekranında, hostun bir önceki değeri hedefi geri çekmesin
   if (performance.now() >= aimHoldUntil || !myTurn()) airTarget = Array.isArray(s.at) ? { x: +s.at[0], y: +s.at[1] } : null;
   timer = +s.tm; wind = +s.w; input.charging = !!s.ch; input.power = +s.pw; moveLeft = +s.ml || 0; portalPending = s.pp | 0;
@@ -3420,7 +3453,7 @@ function updateCam() {
     const fp = projs.find(p => p.type !== 'jet') || projs[0];
     if (overview) { tx = W / 2; ty = (mapTop + WATER + 25) / 2 + 8 / cam.z; }
     else if (fp && fp.type === 'jet' && airTarget) { tx = airTarget.x; ty = (surfaceY(airTarget.x) ?? H / 2) - 90; }
-    else if (fp) { tx = fp.x; ty = fp.y; }
+    else if (fp && !(state === 'aim' && kacis && active)) { tx = fp.x; ty = fp.y; }   // kaçarken kamera askerde
     else if (state === 'settle' && camHold) { tx = camHold.x; ty = camHold.y; }
     else if (state === 'kaos' && kaosBirimim()) { const b = kaosBirimim(); tx = b.x; ty = b.y - 50; }
     else if (active) { tx = active.x; ty = active.y - 50; }
@@ -4721,7 +4754,7 @@ function updateHud() {
   sinif($('fireLbl'), 'sm', goat || shovelIdle || ['portal', 'airstrike', 'lasso', 'revive', 'whistle'].includes(wid));
   ateşIkonu();
   hud(bf, 'aria', etiket, x => bf.setAttribute('aria-label', x + ': basılı tut, bırak'));
-  hud(bf, 'dis', kaosTur ? !(mine || ordekBende) : !mine || !(state === 'aim' || goat) || shovelIdle, x => { bf.disabled = x; });
+  hud(bf, 'dis', kaosTur ? !(mine || ordekBende) : !mine || !(state === 'aim' || goat) || shovelIdle || (kacis && state === 'aim'), x => { bf.disabled = x; });
   metin($('weaponName'), wid === 'portal' ? 'Portal ' + ((kk ? kk.p1 : portalPending) ? '2/2' : '1/2') : WEAPONS[t.weapon].name);
   metin($('weaponAmmo'), 'Silah · ' + ammoText(t.ammo[t.weapon]));
 }
@@ -4773,6 +4806,7 @@ function firePress() {
   if (wid === 'revive' && !diriltmeHedefi(active)) { uyari('Mezara yaklaş'); return; }
   if (wid === 'jet') { uyari('Uçmak için zıpla tuşunu basılı tut'); return; }
   if (jetKul) return;   // havadayken ateş yok, önce in
+  if (kacis) return;   // dinamit bırakıldı: yalnız kaçılır
   if (wid === 'swap') {   // ATEŞ ile sıradaki canlı askere geç
     const tu = t.units.filter(u => u.alive); if (tu.length < 2) { uyari('Geçecek başka asker yok'); return; }
     askerDegistir(units.indexOf(tu[(tu.indexOf(active) + 1) % tu.length])); return;
@@ -4819,7 +4853,7 @@ function bantPaneli() {
 
 // ---- Sprey Jet: zıpla tuşu basılıyken itki, sağ/sol ile yön. Bir kullanım 3 sn yakıt; yere inince ya da yakıt bitince biter ----
 const JET_YAKIT = 3, JET_ITKI = 1.6, JET_VY = 220, JET_VX = 140, JET_AX = 420;
-let jetKul = false, jetYakit = 0, jetHavada = false, jetItki = false, jetSesT = 0, jetKulOnce = false;
+let jetKul = false, jetYakit = 0, jetHavada = false, jetItki = false, jetSesT = 0, jetKulOnce = false, kacis = false;   // kacis: dinamit bırakıldı, patlayana kadar kaçılıyor
 function jetBas() {
   if (state !== 'aim' || !active || !active.alive || input.charging) return;
   const t = team(), wi = WI('jet');
@@ -4862,6 +4896,7 @@ function selectWeapon(i) {
   if (weaponLocked(t, i) || WEAPONS[i].id === 'tape') return;
   if (['shovel', 'jet', 'swap'].includes(WEAPONS[i].id) && !['shovel', 'jet', 'swap'].includes(WEAPONS[t.weapon].id)) t.prevW = t.weapon;
   if (jetKul && WEAPONS[i].id !== 'jet') return;   // uçarken silah değişmez; inince değişir
+  if (kacis && WEAPONS[i].id !== 'jet') return;   // kaçarken yalnız jete geçilebilir
   if (WEAPONS[i].id === 'airstrike' && !airTarget) airTarget = airTargetDefault();
   t.weapon = i; closeWeaponMenu();
 }
