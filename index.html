@@ -581,7 +581,7 @@ const WEAPONS = [
   { id: 'tape', name: 'Koli Bandı', desc: 'Silahları birbirine bantla: Roketli Ördek ya da Misketli Ördek' },
   { id: 'rduck', name: 'Roketli Ördek', desc: 'Bazuka gibi uçar, indiği yerde yürür. Tekrar ATEŞ ile patlat' },
   { id: 'mduck', name: 'Misketli Ördek', desc: 'Deli Ördek gibi yürür, patlayınca 5 kapak saçar' },
-  { id: 'dynamite', name: 'Dinamit', desc: 'Önüne bırakılır, fitili 4 saniyede yanar, büyük patlama' },
+  { id: 'dynamite', name: 'Dinamit', desc: 'Önüne bırakılır, fitili 5 saniyede yanar, büyük patlama. Bıraktıktan sonra kaç' },
   { id: 'barricade', name: 'Barikat', desc: 'İnşaat demiri: haritada bir yere dokun, sağ/sol ile döndür, ATEŞ ile kur. Havada durur. Turu bitirmez' },
   { id: 'swap', name: 'Asker Değiştir', desc: 'Haritada askerine dokun ya da ATEŞ ile sıradaki askerine geç. Turu bitirmez' },
 ];
@@ -749,6 +749,7 @@ const Sound = (() => {
     return { stop(f = 0.12) { try { const n = ac.currentTime; g.gain.cancelScheduledValues(n); g.gain.setValueAtTime(g.gain.value, n); g.gain.linearRampToValueAtTime(0, n + f); s.stop(n + f + 0.02); } catch (e) {} } };
   }
   // Sprey Jet: zıpla basılıyken çalar, bırakınca susar; tekrar basınca sesin kaldığı saniyeden devam eder
+  let fitilSes = null;
   let spreySrc = null, spreyG = null, spreyPos = 0.15, spreyT0 = 0, spreyP0 = 0;
   function sprey(acik) {
     const S = SAMPLES.sprey;
@@ -891,6 +892,16 @@ const Sound = (() => {
         break;
       }
       case 'kapan': osc('square', 900, 180, t, 0.09, 0.22); nz(t, 0.12, 0.5, 'highpass', 2500, 0); osc('triangle', 2400, 1200, t + 0.02, 0.18, 0.12); break;   // demir çeneler çat diye kapanır
+      case 'demir': {   // barikat kurulur: inşaat demiri yere/havaya oturur, kısa çınlama
+        nz(t, 0.03, 0.35, 'highpass', 2500, 0);
+        for (const [f, a, d] of [[523, 0.16, 0.9], [1311, 0.1, 0.7], [2087, 0.06, 0.5], [2967, 0.04, 0.35]]) osc('sine', f, f * 0.995, t, d, a);
+        break;
+      }
+      case 'demirVur': {   // mermi demire çarpar: tok vuruş ve titreyen tını
+        nz(t, 0.06, 0.5, 'bandpass', 1800, 600);
+        for (const [f, a, d] of [[220, 0.22, 0.8], [587, 0.14, 0.6], [943, 0.09, 0.45], [1630, 0.05, 0.3]]) osc('triangle', f, f * 0.97, t, d, a);
+        break;
+      }
       case 'kapanKur': osc('triangle', 700, 500, t, 0.05, 0.18); nz(t + 0.06, 0.04, 0.25, 'highpass', 3000, 0); osc('triangle', 1100, 0, t + 0.12, 0.05, 0.12); break;
       case 'duduk': {   // hakem düdüğü: titreşimli tiz ses
         for (const [f, d] of [[2550, 0], [2620, 0.32]]) { const o = ac.createOscillator(), g = ac.createGain(), l = ac.createOscillator(), lg = ac.createGain();
@@ -908,6 +919,21 @@ const Sound = (() => {
   }
   return {
     unlock, play, sample, jet, ortam, yukle, has: k => !!SAMPLES[k],
+    fitil(acik) {   // dinamit fitili: cızırdayan gürültü + rastgele çıtırtılar; acik false olunca söner
+      if (acik) {
+        if (fitilSes || !on || !ac || ac.state !== 'running') return;
+        const n = ac.currentTime, s = ac.createBufferSource(), f = ac.createBiquadFilter(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+        s.buffer = noise; s.loop = true; f.type = 'bandpass'; f.frequency.value = 4200; f.Q.value = 0.8;
+        g.gain.setValueAtTime(0, n); g.gain.linearRampToValueAtTime(0.12, n + 0.05);
+        lfo.frequency.value = 23; lg.gain.value = 0.05; lfo.connect(lg).connect(g.gain);   // titreşen cızırtı
+        s.connect(f).connect(g).connect(sfx); s.start(n, Math.random()); lfo.start(n);
+        fitilSes = { s, g, lfo, cit: setInterval(() => { if (ac && on) nz(ac.currentTime, 0.02, 0.12 + Math.random() * 0.1, 'highpass', 3000 + Math.random() * 3000, 0); }, 140) };
+      } else if (fitilSes) {
+        const d = fitilSes, n = ac.currentTime; fitilSes = null; clearInterval(d.cit);
+        try { d.g.gain.cancelScheduledValues(n); d.g.gain.setValueAtTime(d.g.gain.value, n); d.g.gain.linearRampToValueAtTime(0, n + 0.05); d.s.stop(n + 0.06); d.lfo.stop(n + 0.06); } catch (e) {}
+      }
+    },
+    get fitilCaliyor() { return !!fitilSes; },
     dongu, dongu_caliyor: k => !!donguler[k], tek, tek_caliyor: k => !!tekler[k], sprey, spreySifirla() { spreyPos = SAMPLES.sprey.o; }, get spreyHazir() { return !!(ac && sampleBuf.sprey); }, get spreyCaliyor() { return !!spreySrc; }, get spreyPos() { return spreyPos; },
     music(want) { musicWanted = want; if (ac) want ? startMusic() : stopMusic(); },
     get on() { return on; },
@@ -1522,6 +1548,11 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['23.2', '21 Kasım 2026', [
+    ['d', 'Dinamitin fitili 5 saniye'],
+    ['y', 'Dinamit fitili yanarken cızırdar'],
+    ['y', 'Barikat kurulunca demir çınlaması, mermi barikata değince demir vuruşu sesi'],
+  ]],
   ['23.1', '21 Kasım 2026', [
     ['d', 'Barikat siperdir: ona çarpan patlama arkasındaki askere hasar vermez'],
     ['d', 'Barikat toprağın içine, mezarın ya da başka barikatın üstüne kurulamaz; kurulamayacak yerde önizleme kırmızı'],
@@ -1849,7 +1880,9 @@ function kapanAdim() {
 }
 // Barikat vuruş sayar: ilk vuruş iz bırakmaz, ikincide eğilip paslanır, üçüncüde kopar
 function barikatHasar(x, y, r) {
-  for (const b of barikatlar) if (barikatUzak(b, x, y) < r * 1.5) b.vurus = (b.vurus || 0) + 1;
+  let vurdu = false;
+  for (const b of barikatlar) if (barikatUzak(b, x, y) < r * 1.5) { b.vurus = (b.vurus || 0) + 1; vurdu = true; }
+  if (vurdu) sesYay('demirVur');
   const kopan = barikatlar.filter(b => b.vurus >= BARIKAT_VURUS);
   if (!kopan.length) return;
   barikatlar = barikatlar.filter(b => b.vurus < BARIKAT_VURUS);
@@ -1877,7 +1910,7 @@ function barikatKur(u, t) {
   const g = barikatHayal(t, u), engel = barikatEngel(g);
   if (engel) { uyari(engel); return false; }
   barikatlar.push({ x: g.x, y: g.y, a: g.a, vurus: 0 });
-  t.barG = null; sesYay('kapanKur');
+  t.barG = null; sesYay('demir');
   return true;
 }
 function barikatCiz(b, hayal, c = ctx) {
@@ -2279,7 +2312,7 @@ function mermiAt(u, w, power, slot = 0) {
   else if (w === 'grenade') addProj({ type: 'grenade', x: sx, y: sy, vx: dx * sp, vy: dy * sp, fuse: 3, bounce: 0.5, r: 46, dmg: 50, age: 0, atan: ui });
   else if (w === 'cluster') addProj({ type: 'cluster', x: sx, y: sy, vx: dx * sp, vy: dy * sp, impact: true, r: 30, dmg: 13.5, age: 0, atan: ui });
   else if (w === 'goat' || w === 'mduck') addProj({ type: w, x: u.x + u.facing * 14, y: u.y, h: 14, vx: 0, vy: 0, grounded: false, dir: u.facing, fuse: 6, hop: 0.8, walk: 0, r: 60, dmg: 60, age: 0, atan: ui });
-  else if (w === 'dynamite') addProj({ type: 'dynamite', x: u.x + u.facing * 16, y: u.y - 4, vx: u.facing * 30, vy: -60, fuse: 4, bounce: 0.25, r: 64, dmg: 70, age: 0, atan: ui });
+  else if (w === 'dynamite') addProj({ type: 'dynamite', x: u.x + u.facing * 16, y: u.y - 4, vx: u.facing * 30, vy: -60, fuse: 5, bounce: 0.25, r: 64, dmg: 70, age: 0, atan: ui });
   else if (w === 'rduck') addProj({ type: 'rduck', x: sx, y: sy, vx: dx * sp, vy: dy * sp, wind: true, age: 0, dir: u.facing, atan: ui });
   else if (w === 'portal') addProj({ type: 'pshot', x: sx, y: sy, vx: dx * sp, vy: dy * sp, slot, o: ui, age: 0, atan: ui });
 }
@@ -2704,7 +2737,7 @@ function stepProjectile(p) {
         const dot = p.vx * nrm.x + p.vy * nrm.y;
         if (dot < 0) { p.vx -= 2 * dot * nrm.x; p.vy -= 2 * dot * nrm.y; }
         p.vx *= p.bounce; p.vy *= p.bounce;
-        if (speed > 140) bounce();
+        if (speed > 140) { if (barikatlar.length && barikatIci(p.x + p.vx * 0.01, p.y + p.vy * 0.01)) sesYay('demirVur'); else bounce(); }
         if (Math.hypot(p.vx, p.vy) < 35) { p.vx = 0; p.vy = 0; p.resting = true; }
         break;
       }
@@ -2904,7 +2937,7 @@ function kabloZamani() {
 }
 function toastAll(text) { toast(text); emit({ t: 'toast', text }); }
 // Kodla üretilen bir sesi herkeste çalar
-const YAYIN_SES = new Set(['dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir', 'traitor']);
+const YAYIN_SES = new Set(['dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir', 'traitor', 'demir', 'demirVur']);
 function sesYay(n) { Sound.play(n); emit({ t: 'ps', n }); }
 function teamGone(t) {
   if (mode !== 'host' || !t || t.slot === undefined || t.slot === 0) return false;
@@ -4641,6 +4674,7 @@ function updateFx(dt) {
     if (Sound.spreyHazir) Sound.sprey(true);
     else { jetSesT -= dt; if (jetSesT <= 0) { jetSesT = 0.12; Sound.play('jet'); } }   // dosya yüklenmediyse kodla üretilen fıs
   } else Sound.sprey(false);
+  Sound.fitil(inGameState() && projs.some(p => p.type === 'dynamite'));   // dinamit yanarken fitil cızırdar
   Sound.dongu('duduk', kaosTur && inGameState());   // düdük sesi Kaos Turu bitene kadar döner
   // Güç toplama sesi: normal turda sıradakinin, Kaos Turu'nda yalnız kendi güç toplaman (başkasınınki ele verirdi)
   const kg = state === 'kaos' ? benimKaos() : null;
