@@ -1253,6 +1253,7 @@ function startGame(opts) {
     const x = xs[k]?.x ?? (100 + k * 70), y = xs[k]?.y ?? surfaceY(x) ?? 200;
     const name = String(t.wn[idx] || '').trim().slice(0, 12) || WORM_NAMES[(ti * 4 + idx) % WORM_NAMES.length];
     const u = { x, y, vx: 0, vy: 0, h: UNIT_H, grounded: true, hp: 100, alive: true, team: t, name, traitor: false, facing: x < W / 2 ? 1 : -1, aim: -0.5, isUnit: true };
+    for (let k = 0; k < 300 && !bodyFree(u.x, u.y, u.h); k++) u.y--;   // asla toprağın içinde başlamasın
     t.units.push(u); units.push(u);
   }
   turnTeam = (Math.floor(rng() * teams.length) + teams.length - 1) % teams.length;
@@ -1470,6 +1471,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['19.1', '20 Kasım 2026', [
+    ['d', 'Askerler maç başında toprağın içinde başlamaz'],
+    ['y', 'Harita denetimi: bir telefonun haritası oda sahibininkinden farklı kalırsa doğru harita kendiliğinden yeniden gelir'],
+  ]],
   ['19', '20 Kasım 2026', [
     ['d', '6 kişilik maçta asit yağmuru gelince oyunun donup herkesin kopması düzeltildi: büyük haritada erime bilgisi tek mesaja sığmıyordu, artık parçalanarak gider'],
     ['d', 'Uzun maçta oyundan çıkıp geri dönen oyuncu haritayı yine doğru alır (aynı sorun)'],
@@ -2711,6 +2716,11 @@ function onHostData(conn, m) {
   }
   if (m.t === 'ping') { const p = players.find(p => p.conn === conn); if (p) p.rtt = clamp(+m.r || 0, 0, 9999); send(conn, { t: 'pong', c: m.c }); return; }
   if (m.t === 'ab') { const p = players.find(p => p.conn === conn); if (p) arkaPlanda(p.slot, !!m.on, true); return; }
+  if (m.t === 'senk') {   // misafirin haritası bozuk: haritayı ve patlama kaydını yeniden gönder
+    const p = players.find(p => p.conn === conn);
+    if (p && inGame && lastInit) { send(conn, { t: 'init', ...lastInit, carves: carveLog, you: p.slot }); send(conn, { t: 'turn', tt: turnTeam }); }
+    return;
+  }
   if (m.t === 'tk') { const p = players.find(p => p.conn === conn); if (p) { konusanGoster(p.slot, !!m.on); emit({ t: 'tk', s: p.slot, on: m.on ? 1 : 0 }); } return; }
   if (m.t === 'wn') { const p = players.find(p => p.conn === conn); if (p) p.wn = cleanNames(m.names); return; }
   if (m.t === 'nm' && !inGame) {
@@ -2845,6 +2855,8 @@ function onClientData(m) {
       if (!Array.isArray(m.teams)) break;
       inGame = true; lastSnapN = 0;
       if (m.you !== undefined) mySlot = m.you | 0;
+      if ((m.seed >>> 0) !== senkMac) { senkMac = m.seed >>> 0; senkIstek = 0; }   // yeni maç: yeniden isteme hakkı sıfırlanır
+      senkFark = 0;
       haritaIleBaslat(m, () => { for (const c of Array.isArray(m.carves) ? m.carves : []) { if (c[0] === 'a') asitUygula(c[1]); else carve(+c[0], +c[1], +c[2]); } });
       break;
     case 's': if (inGame && teams.length && state !== 'menu') { if (m.n && m.n <= lastSnapN) break; lastSnapN = m.n | 0; applySnap(m); } break;
@@ -2867,6 +2879,7 @@ function onClientData(m) {
     case 'pong': if (+m.c) benimRtt = Math.round(performance.now() - m.c); break;
     case 'ab': arkaPlanda(m.s | 0, !!m.on, false); break;
     case 'net': if (Array.isArray(m.r)) netGoster(m.r); break;
+    case 'ah': araziDenetle(m.h); break;
     case 'as': if (inGame) jetSesi(); break;
     case 'wh': if (inGame) { Sound.sample(m.n === 'kementAt' ? 'kementAt' : 'kirbac') || Sound.play('whip'); buzz(25); } break;
     case 'sh': if (inGame) { bubbles.push({ i: m.i | 0, t: 0 }); Sound.sample('kalkan') || Sound.play('shield'); buzz(40); } break;
@@ -3089,8 +3102,20 @@ function netGoster(r) {
     t.sig.title = rtt < 0 ? 'Bağlantı koptu' : ab ? 'Uygulamadan çıktı' : slot === 0 && mode !== 'client' ? 'Oda sahibi' : rtt + ' ms';
   }
 }
+// Arazi denetimi: host 2 sn'de bir arazisinin özetini yollar. Bir misafirin arazisi iki denetim üst üste farklıysa
+// (bir olay kaçmış ya da harita yanlış kurulmuş) host'tan haritayı ve bütün patlama kaydını yeniden ister.
+function araziOzet() { if (!solid) return 0; let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; }
+let senkFark = 0, senkIstek = 0, senkMac = -1;
+function araziDenetle(h) {
+  if (mode !== 'client' || !inGame || !solid || state === 'menu' || state === 'over' || state === 'wait' || projs.length) { senkFark = 0; return; }
+  if (araziOzet() === (h | 0)) { senkFark = 0; return; }
+  if (++senkFark < 2 || senkIstek >= 3) return;
+  senkFark = 0; senkIstek++;
+  send(hostConn, { t: 'senk' });
+}
 setInterval(() => {
   if (mode !== 'host' || !inGame) return;
+  if (state !== 'menu' && state !== 'over' && !projs.length) emit({ t: 'ah', h: araziOzet() });
   const r = players.map(p => [p.slot, p.slot === mySlot ? 0 : p.conn && !p.gone ? (p.rtt | 0) : -1, arkadakiler.has(p.slot) ? 1 : 0]);
   emit({ t: 'net', r }); netGoster(r);
 }, 2000);
@@ -5053,7 +5078,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  get players() { return players; }, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
+  get players() { return players; }, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
