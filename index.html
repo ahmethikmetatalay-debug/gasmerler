@@ -1474,6 +1474,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['21.1', '20 Kasım 2026', [
+    ['d', 'Kaos Turu: Sprey Jet ile uçarken zıpla düğmesi bırakılınca jet durur (misafirde basılı kalıyordu)'],
+    ['d', 'Kaos Turu: atışlardan sonra kendi Deli Ördeğini ATEŞ ile patlatabilirsin (düğme dokunmaya kapalı kalıyordu)'],
+  ]],
   ['21', '20 Kasım 2026', [
     ['d', 'Kaos Turu\'nda kısıt yok: herkes yürüyebilir, zıplayabilir, jetle uçabilir, kürekle kazabilir ve bütün silahları kullanabilir'],
     ['d', 'Kaos Turu bir maçta en çok bir kez gelir'],
@@ -4476,7 +4480,9 @@ function updateHud() {
   metin($('turnName'), kaosTur ? 'KAOS TURU' : t.name + (mode !== 'local' && mine ? ' · sen' : ''));
   stil($('turnDot'), 'background', t.c);
   const hb = $('hudBottom');
-  sinif(hb, 'wait', !mine);
+  // Kaos atışlarından sonra kendi yürüyen ördeği olan oyuncunun ATEŞ düğmesi açık kalır (patlatabilsin)
+  const ordekBende = kaosTur && kk && state === 'fly' && projs.some(p => YURUYEN.has(p.type) && p.atan === kk.ui);
+  sinif(hb, 'wait', !(mine || ordekBende));
   // Kürek seçiliyken çubuk kalan kazma hakkını gösterir, oklar kazar
   const ML = kk ? kml(kk) : moveLeft, DG = kk ? kdg(kk) : digging, DL = kk ? kdl(kk) : digLeft, oyunda = state === 'aim' || (state === 'kaos' && !!kk);
   const shov = WEAPONS[t.weapon].id === 'shovel', canDig = DG ? DL > 0 : t.ammo[t.weapon] > 0;
@@ -4510,8 +4516,7 @@ function updateHud() {
   sinif($('fireLbl'), 'sm', goat || shovelIdle || ['portal', 'airstrike', 'lasso', 'revive', 'whistle'].includes(wid));
   ateşIkonu();
   hud(bf, 'aria', etiket, x => bf.setAttribute('aria-label', x + ': basılı tut, bırak'));
-  const benimOrdek = kaosTur && kk && state === 'fly' && projs.some(p => YURUYEN.has(p.type) && p.atan === kk.ui);
-  hud(bf, 'dis', kaosTur ? !(mine || benimOrdek) : !mine || !(state === 'aim' || goat) || shovelIdle, x => { bf.disabled = x; });
+  hud(bf, 'dis', kaosTur ? !(mine || ordekBende) : !mine || !(state === 'aim' || goat) || shovelIdle, x => { bf.disabled = x; });
   metin($('weaponName'), wid === 'portal' ? 'Portal ' + (portalPending ? '2/2' : '1/2') : WEAPONS[t.weapon].name);
   metin($('weaponAmmo'), 'Silah · ' + ammoText(t.ammo[t.weapon]));
 }
@@ -4818,11 +4823,14 @@ function holdButton(el, key) {
   el.addEventListener('contextmenu', e => e.preventDefault());
 }
 holdButton($('bL'), 'left'); holdButton($('bR'), 'right');
-$('bJ').addEventListener('pointerdown', e => { e.preventDefault(); try { $('bJ').setPointerCapture(e.pointerId); } catch (er) {} act('j'); });
-for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) $('bJ').addEventListener(ev, () => { if (jetKul || input.jet) act('ju'); });
+// Zıpla düğmesi: basılı tutunca Sprey Jet itki verir; bırakınca her zaman "bıraktı" gider
+// (Kaos Turu'nda jet durumu katılımcıda tutulduğu için önceki koşul misafirde hiç tutmuyor, jet hep basılı kalıyordu)
+let zipBasili = false;
+$('bJ').addEventListener('pointerdown', e => { e.preventDefault(); try { $('bJ').setPointerCapture(e.pointerId); } catch (er) {} zipBasili = true; act('j'); });
+for (const ev of ['pointerup', 'pointercancel', 'lostpointercapture']) $('bJ').addEventListener(ev, () => { if (zipBasili) { zipBasili = false; act('ju'); } });
 $('bMap').addEventListener('click', toggleMap);$('bWeapon').addEventListener('click', () => $('weaponMenu').hidden ? openWeaponMenu() : closeWeaponMenu());
 const bFire = $('bFire');
-bFire.addEventListener('pointerdown', e => { e.preventDefault(); bFire.setPointerCapture(e.pointerId); act('fp'); });
+bFire.addEventListener('pointerdown', e => { e.preventDefault(); try { bFire.setPointerCapture(e.pointerId); } catch (er) {} act('fp'); });
 bFire.addEventListener('pointerup', () => act('fr'));
 bFire.addEventListener('pointercancel', () => act('fr'));
 bFire.addEventListener('contextmenu', e => e.preventDefault());
@@ -5168,7 +5176,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  get players() { return players; }, lootTablosu, get terr() { return terr; }, GASMER, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, set kaosIlan(v) { kaosIlan = v; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
+  get players() { return players; }, lootTablosu, get terr() { return terr; }, GASMER, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, benimKaos, toScreen, get input() { return input; }, get jetKul() { return jetKul; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, set kaosIlan(v) { kaosIlan = v; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
