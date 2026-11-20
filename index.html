@@ -608,7 +608,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v21-';
+const ID_PREFIX = 'gasmerler-v22-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1474,6 +1474,11 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['22', '20 Kasım 2026', [
+    ['d', 'Kaos Turu: herkesin hamlesi gizli. Yürüme, zıplama, jetle uçma ve kürek tüneli başkalarına görünmez; atışlar çıkınca herkes her şeyi aynı anda görür'],
+    ['d', 'Kaos Turu: iki portal atılabilir (ilk atış kaydedilir, ikincisini nişanlarsın; atışta ikisi birden açılır)'],
+    ['d', 'Kaos Turu sırasında sandık alınmaz ve elektrik çarpmaz (yerini ele vermesin); atışlar çıkınca normal'],
+  ]],
   ['21.1', '20 Kasım 2026', [
     ['d', 'Kaos Turu: Sprey Jet ile uçarken zıpla düğmesi bırakılınca jet durur (misafirde basılı kalıyordu)'],
     ['d', 'Kaos Turu: atışlardan sonra kendi Deli Ördeğini ATEŞ ile patlatabilirsin (düğme dokunmaya kapalı kalıyordu)'],
@@ -1996,7 +2001,7 @@ function stepCrates() {
   for (const c of crates) {
     if (c.dead) continue;
     if (c.pulled) continue;   // çekilen sandığı yoldaki başka asker kapamaz
-    for (const u of units) if (u.alive && Math.hypot(u.x - c.x, (u.y - UNIT_H / 2) - (c.y - 9)) < 28) { collect(c, u); break; }
+    if (state !== 'kaos') for (const u of units) if (u.alive && Math.hypot(u.x - c.x, (u.y - UNIT_H / 2) - (c.y - 9)) < 28) { collect(c, u); break; }
   }
   crates = crates.filter(c => !c.dead);
 }
@@ -2131,7 +2136,7 @@ function mermiAt(u, w, power, slot = 0) {
 // Hareket yok; 10 sn içinde nişan, güç ve silah. Online'da herkes kendi telefonunda; aynı telefonda sırayla, perde arkasında.
 const KAOS_SURE = 30, KAOS_SANS = 0.12;   // 4. turdan sonra her tur %12 ihtimal; maçta en çok bir kez
 const KAOS_SILAH = new Set(['bazooka', 'grenade', 'punch', 'cluster', 'goat', 'rduck', 'mduck', 'portal']);
-let kaosIlan = false, kaosCalan = -1, kaosTur = false, kaos = null, dudukler = [], kaosOldu = false, kaosYedek = null;
+let kaosIlan = false, kaosCalan = -1, kaosTur = false, kaos = null, dudukler = [], kaosOldu = false, kaosYedek = null, kaosKazilar = [];
 function dudukFx(i) { dudukler.push({ i, t: 0 }); Sound.play('duduk'); buzz(60); }
 // Her katılımcının kendi tur durumu (yürüme hakkı, jet, kürek, portal, hedef, tuşlar). Bir katılımcının hamlesi işlenirken
 // oyunun "sıradaki asker" değişkenleri geçici olarak onunkilerle değiştirilir; böylece normal turdaki bütün kurallar
@@ -2161,7 +2166,8 @@ function kaosBaslat() {
     list.push({ ti, ui: units.indexOf(t.units[t.cur]), hazir: false, ates: false, pw: 0, c: kaosBaglam() });
   });
   kaos = { list, sira: 0, perde: mode === 'local' };
-  for (const u of units) u._kaosYon = u.facing;   // başkalarının nişan için döndüğü görünmesin
+  for (const u of units) { u._kaosYon = u.facing; u._kx = u.x; u._ky = u.y; }   // başkalarının hamleleri atışlar çıkana kadar görünmesin
+  kaosKazilar = [];
   kaosTur = true; active = null; state = 'kaos'; timer = KAOS_SURE;
   wind = Math.round((rng() * 2 - 1) * 10) / 10;
   moveLeft = 0; portalPending = 0; portalReturn = false; ffTurn = 0; shotThisTurn = false; airTarget = null; camHold = null;
@@ -2218,8 +2224,8 @@ function kaosAct(k, m) {
   kaosGir(k);
   try {
     if (m.a === 'fp') kaosAtesBas(k, t);
-    else if (m.a === 'fr') { if (input.charging) { k.pw = input.power; input.charging = false; k.hazir = k.ates = true; } }
-    else applyAct(m, -1, true);   // yürü, zıpla, jet, nişan, silah seç, koli bandı, hava desteği hedefi: normal turdaki gibi
+    else if (m.a === 'fr') { if (input.charging) kaosGucBitti(k, t); }
+    else { if (m.a === 'w') k.p1 = null; applyAct(m, -1, true); }   // silah değişince yarım portal atışı unutulur
   } finally { kaosCik(k); }
 }
 // ATEŞ'e basınca: anında kullanılan silahlar hemen hazır olur, diğerleri güç toplar; atışlar süre sonunda birlikte çıkar
@@ -2235,6 +2241,12 @@ function kaosAtesBas(k, t) {
   if (ANINDA.has(w)) { k.pw = 0; k.hazir = k.ates = true; }
   else { input.charging = true; input.power = 0; }
 }
+// Güç toplama bitti (bırakıldı ya da doldu). Portalda ilk atış kaydedilir, ikinci portal için nişan beklenir
+function kaosGucBitti(k, t) {
+  input.charging = false;
+  if (WEAPONS[t.weapon].id === 'portal' && !k.p1) { k.p1 = { aim: active.aim, f: active.facing, pw: input.power }; uyari('İkinci portalı nişanla ve ateşle'); return; }
+  k.pw = input.power; k.hazir = k.ates = true;
+}
 function kaosAdim() {
   if (!kaos || kaos.perde) return;
   timer -= DT;
@@ -2246,7 +2258,7 @@ function kaosAdim() {
     kaosGir(k);
     try {
       kontrolAdim(true);
-      if (input.charging && input.power >= 1) { k.pw = 1; input.charging = false; k.hazir = k.ates = true; }
+      if (input.charging && input.power >= 1) kaosGucBitti(k, teams[k.ti]);
     } finally { kaosCik(k); }
   }
   // Süre biter: güç toplamaya başlamış olan o güçle ateş eder, hiç başlamamış olan etmez
@@ -2261,17 +2273,27 @@ function kaosAdim() {
   } else if (timer <= 0 || kaos.list.every(k => k.hazir)) { kaos.list.forEach(bitir); kaosAtesle(); }
 }
 function kaosAtesle() {
+  for (const [x, y] of kaosKazilar) { carve(x, y, DIG_R); if (mode === 'host') carveLog.push([x, y, DIG_R]); emit({ t: 'dg', x, y, r: DIG_R }); }
+  kaosKazilar = [];
   for (const k of kaos.list) {
     const u = units[k.ui];
-    if (!k.ates || !u || !u.alive) continue;
+    if ((!k.ates && !k.p1) || !u || !u.alive) continue;
     kaosGir(k);
-    try { input.charging = false; fire(k.pw); } finally { kaosCik(k); }   // normal turdaki ateş: her silah kendi kuralıyla
+    try {
+      input.charging = false;
+      if (k.p1) {   // portal: önce kaydedilen ilk atış, sonra ikincisi
+        const a0 = u.aim, f0 = u.facing;
+        u.aim = k.p1.aim; u.facing = k.p1.f; portalPending = 0; fire(k.p1.pw);
+        u.aim = a0; u.facing = f0;
+        if (k.ates) fire(k.pw);
+      } else fire(k.pw);   // normal turdaki ateş: her silah kendi kuralıyla
+    } finally { kaosCik(k); }
   }
   state = 'fly'; shotThisTurn = true; timer = 0; portalReturn = false; cam.free = false;
 }
 function kaosSnap() {
   if (!kaosTur || !kaos) return 0;
-  return { l: kaos.list.map(k => { const c = k.c, at = c.airTarget; return [k.ti, k.ui, k.hazir ? 1 : 0, c.input.charging ? 1 : 0, r2(kp(k)), c.moveLeft, c.jetKul ? 1 : 0, r2(c.jetYakit), c.jetItki ? 1 : 0, c.digLeft, c.digging ? 1 : 0, at ? r1(at.x) : -1, at ? r1(at.y) : -1]; }) };
+  return { l: kaos.list.map(k => { const c = k.c, at = c.airTarget; return [k.ti, k.ui, k.hazir ? 1 : 0, c.input.charging ? 1 : 0, r2(kp(k)), c.moveLeft, c.jetKul ? 1 : 0, r2(c.jetYakit), c.jetItki ? 1 : 0, c.digLeft, c.digging ? 1 : 0, at ? r1(at.x) : -1, at ? r1(at.y) : -1, k.p1 ? 1 : 0]; }) };
 }
 
 // Hele İki Gözüm: ses çalar, F-16 haritanın uzak kenarından gelir ve hedefin üstünden geçerken 5 bomba bırakır
@@ -2391,7 +2413,12 @@ function dig(dir) {
     const cx = active.x + dx * 10, cy = active.y - UNIT_H / 2 + dy * 10;
     if (!soilAhead(cx, cy, dx, dy)) { digAcc = 0; break; }
     digAcc--; digLeft--;
-    if (++digMark % 3 === 0) {
+    if (++digMark % 3 === 0 && kaosYedek) {   // Kaos Turu: toprak hemen açılır ama tünel başkalarına atışlar çıkınca görünür
+      carveSolid(cx, cy, DIG_R, DIG_R); kaosKazilar.push([r1(cx), r1(cy)]);
+      const kazan = t.slot === undefined ? null : players.find(p => p.slot === t.slot);
+      if (mode === 'host' && t.slot === mySlot) carve(cx, cy, DIG_R);
+      else if (kazan && kazan.conn) send(kazan.conn, { t: 'dg', x: r1(cx), y: r1(cy), r: DIG_R });
+    } else if (digMark % 3 === 0) {
       carve(cx, cy, DIG_R);
       if (mode === 'host') carveLog.push([r1(cx), r1(cy), DIG_R]);
       emit({ t: 'dg', x: r1(cx), y: r1(cy), r: DIG_R }); kurekSesi();
@@ -2643,7 +2670,7 @@ function kontrolAdim(kaosMu) {
         if (!walkStep(active, dir) || !active.grounded) { walkAcc = 0; break; }
         moveLeft--;
       }
-      if (elektrik.length) elektrikKontrol();
+      if (elektrik.length && !kaosMu) elektrikKontrol();
     }
   }
   if (input.charging) { input.power = Math.min(1, input.power + DT / 1.3); if (input.power >= 1 && !kaosMu) fire(1); }
@@ -3007,8 +3034,8 @@ function applySnap(s) {
   asitDurum = s.ad === 1 ? 'uyari' : s.ad === 2 ? 'yagis' : null;
   const kaosOnce = kaosTur;
   kaosTur = !!(s.ko && Array.isArray(s.ko.l));
-  kaos = kaosTur ? { sira: 0, perde: false, list: s.ko.l.slice(0, MAX_PLAYERS).map(a => ({ ti: a[0] | 0, ui: a[1] | 0, hazir: !!a[2], ch: !!a[3], pw: +a[4] || 0, ml: +a[5] || 0, jk: !!a[6], jy: +a[7] || 0, ji: !!a[8], dl: +a[9] || 0, dg: !!a[10], at: a[11] >= 0 ? { x: +a[11], y: +a[12] } : null })) } : null;
-  if (kaosTur && !kaosOnce) { closeWeaponMenu(); for (const u of units) u._kaosYon = u.facing; if (benimKaos()) buzz(120); }
+  kaos = kaosTur ? { sira: 0, perde: false, list: s.ko.l.slice(0, MAX_PLAYERS).map(a => ({ ti: a[0] | 0, ui: a[1] | 0, hazir: !!a[2], ch: !!a[3], pw: +a[4] || 0, ml: +a[5] || 0, jk: !!a[6], jy: +a[7] || 0, ji: !!a[8], dl: +a[9] || 0, dg: !!a[10], at: a[11] >= 0 ? { x: +a[11], y: +a[12] } : null, p1: !!a[13] })) } : null;
+  if (kaosTur && !kaosOnce) { closeWeaponMenu(); for (const u of units) { u._kaosYon = u.facing; u._kx = u.tx ?? u.x; u._ky = u.ty ?? u.y; } if (benimKaos()) buzz(120); }
   kapanlar = (s.ka || []).slice(0, 40).map(a => ({ x: +a[0], y: +a[1], sahip: a[2] | 0, kapali: !!a[3] }));
   portals = (s.po || []).slice(0, 40).map(a => ({ x: a[0], y: a[1], nx: a[2], ny: a[3], o: a[4] | 0, s: a[5] ? 1 : 0 }));
   lastSnapAt = now; warnedStale = false;
@@ -4119,7 +4146,7 @@ function drawUnit(u, isActive, t) {
   GASMER.draw(ctx, gop);
   silah();
   // Sprey Jet sırtta: seçiliyken ya da uçarken. Ölçüler dünya pikseli, yerel ölçekten geri çevrilir
-  const jk = kaosKat(u), jKul = jk ? kjk(jk) : isActive && jetKul;
+  const jk = kaosKat(u), jKul = jk ? kjk(jk) && (state !== 'kaos' || u === kaosBirimim()) : isActive && jetKul;   // başkasının jeti görünmez
   if (jKul || (aiming && wid === 'jet')) {
     const itki = jk ? kji(jk) : jetItki, yakit = jk ? kjy(jk) : jetYakit;
     ctx.save(); ctx.scale(f, 1); ctx.translate(-11 / UNIT_SCALE, -17 / UNIT_SCALE); ctx.scale(0.66 / UNIT_SCALE, 0.66 / UNIT_SCALE);
@@ -4298,6 +4325,14 @@ function drawEdgeMarks(vw, vh) {
 }
 
 function render(t) {
+  const gizli = [];
+  if (state === 'kaos' && kaos) {
+    const b = kaosBirimim();
+    for (const k of kaos.list) { const u = units[k.ui]; if (u && u !== b && u._kx !== undefined) { gizli.push([u, u.x, u.y]); u.x = u._kx; u.y = u._ky; } }
+  }
+  try { renderIc(t); } finally { for (const [u, x, y] of gizli) { u.x = x; u.y = y; } }
+}
+function renderIc(t) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const { vw, vh } = viewSize();
   if (cv.width !== Math.round(vw * dpr) || cv.height !== Math.round(vh * dpr)) { cv.width = Math.round(vw * dpr); cv.height = Math.round(vh * dpr); }
@@ -4399,7 +4434,7 @@ function updateFx(dt) {
   for (const d of dudukler) d.t += dt;
   dudukler = dudukler.filter(d => d.t < 1);
   for (const k of kokular) k.t += dt;
-  const ucanlar = kaosTur && kaos ? kaos.list.filter(kji).map(k => units[k.ui]).filter(u => u && u.alive) : jetItki && active && active.alive ? [active] : [];
+  const ucanlar = kaosTur && kaos ? kaos.list.filter(kji).map(k => units[k.ui]).filter(u => u && u.alive && (state !== 'kaos' || u === kaosBirimim())) : jetItki && active && active.alive ? [active] : [];
   for (const ju of ucanlar) {
     const f = ju.facing, bx = ju.x - f * 10, by = ju.y - 10;
     for (let i = 0; i < 2; i++) parts.push({ kind: 'spark', c: YENI.SPREY_RENK[i] + '0.8)', x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 40, g: -20, size: 2 + Math.random() * 2.5, life: 0.22, max: 0.22 });
@@ -4517,7 +4552,7 @@ function updateHud() {
   ateşIkonu();
   hud(bf, 'aria', etiket, x => bf.setAttribute('aria-label', x + ': basılı tut, bırak'));
   hud(bf, 'dis', kaosTur ? !(mine || ordekBende) : !mine || !(state === 'aim' || goat) || shovelIdle, x => { bf.disabled = x; });
-  metin($('weaponName'), wid === 'portal' ? 'Portal ' + (portalPending ? '2/2' : '1/2') : WEAPONS[t.weapon].name);
+  metin($('weaponName'), wid === 'portal' ? 'Portal ' + ((kk ? kk.p1 : portalPending) ? '2/2' : '1/2') : WEAPONS[t.weapon].name);
   metin($('weaponAmmo'), 'Silah · ' + ammoText(t.ammo[t.weapon]));
 }
 
@@ -5176,7 +5211,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  get players() { return players; }, lootTablosu, get terr() { return terr; }, GASMER, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, benimKaos, toScreen, get input() { return input; }, get jetKul() { return jetKul; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, set kaosIlan(v) { kaosIlan = v; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
+  get players() { return players; }, lootTablosu, get terr() { return terr; }, GASMER, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, benimKaos, kaosBirimim, get kaosKazilar() { return kaosKazilar; }, toScreen, get input() { return input; }, get jetKul() { return jetKul; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, set kaosIlan(v) { kaosIlan = v; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
