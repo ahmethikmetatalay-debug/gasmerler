@@ -1471,6 +1471,11 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['19.3', '20 Kasım 2026', [
+    ['d', 'Link haresi aynı görünür ama her karede yeniden çizilmez, bir kez hazırlanır (link alan takımda telefon çok daha az yorulur)'],
+    ['k', 'Karakterden küçük ayrıntılar kaldırıldı: pançodaki X dikişi, kahverengi yama, şişe ipi, gözdeki parıltı'],
+    ['k', 'Gözlerin nişana bakması, panik yüzü ve havada etek uçuşması kaldırıldı'],
+  ]],
   ['19.2', '20 Kasım 2026', [
     ['d', 'Daha az ısınma: oyun saniyede en çok 60 kare çizer (120 Hz ekranlı telefonlar gereksiz yere iki kat çiziyordu)'],
     ['d', 'Ekran üstündeki yazı ve göstergeler yalnız değişince güncellenir'],
@@ -3256,7 +3261,7 @@ function drawBackdrop(vw, vh, t) {
    })
    ====================================================================== */
 const GASMER = (() => {
-  const D = {"hole":"M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z","skin":[["shape",["E",1238.0,790.0,262.0,300.0],"#d9966b",null,0,"butt","miter",1.0,0]],"lids":[["shape","M1061,862 L1061,818.5 C1123.4,787.0 1166.6,787.0 1229,818.5 L1229,862 Z","#d9966b",null,0,"butt","miter",1.0,0],["shape","M1085,822.0 C1123.4,791.2 1166.6,791.2 1205,822.0",null,"#b06c48",14.0,"round","miter",1.0,0],["shape","M1269,850 L1269,806.7 C1328.4,777.0 1367.6,777.0 1427,806.7 L1427,850 Z","#d9966b",null,0,"butt","miter",1.0,0],["shape","M1293,810.0 C1328.4,780.96 1367.6,780.96 1403,810.0",null,"#b06c48",14.0,"round","miter",1.0,0]],"lidsH":[["shape","M1061,642 L1239,642 L1239,748.5 L1061,699.5 Z","#d9966b",null,0,"butt","miter",1.0,0],["shape","M1259,638 L1427,638 L1427,694.5 L1259,740.7 Z","#d9966b",null,0,"butt","miter",1.0,0]],"hair":[["shape","M960,470 C1080,430 1300,420 1460,480 L1440,550 C1400,585 1360,578 1335,552 C1320,595 1270,602 1235,565 C1210,605 1150,610 1120,568 C1090,602 1030,598 1010,560 C990,585 960,585 950,570 Z","#4a3426","#060303",14.0,"butt","round",1.0,0]],"brows":[["shape","M1075,640 C1110,604 1180,600 1222,624",null,"#060303",26.0,"round","round",1.0,0],["shape","M1288,628 C1322,602 1378,604 1410,628",null,"#060303",24.0,"round","round",1.0,0]],"browsH":[["shape","M1070,612 L1220,690",null,"#060303",40.0,"round","round",1.0,0],["shape","M1290,690 L1425,612",null,"#060303",38.0,"round","round",1.0,0]],"buff":[["shape","M900,985 C1050,935 1300,880 1455,836 C1490,880 1515,935 1530,990 L1540,1220 L900,1220 Z","#5b5e45","#060303",16.0,"butt","round",1.0,0],["shape","M1440,870 C1380,960 1290,1040 1190,1100",null,"#45472f",14.0,"round","round",1.0,0],["shape","M1490,930 C1460,1010 1420,1070 1360,1120",null,"#45472f",14.0,"round","round",1.0,0]],"rim":[["shape","M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z",null,"#060303",104.0,"butt","round",1.0,0],["shape","M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z",null,"ana",54.0,"butt","round",1.0,0]],"eyes":[[1145,752,54,70],[1348,744,49,66]],"bodyUcus":[["shape","M392,1160 C360,1150 335,1135 318,1110",null,"#3d3226",14.0,"round","round",1.0,0],["shape","M290,1150 L340,1150 L342,1185 C392,1205 402,1240 402,1290 L402,1520 Q402,1560 362,1560 L268,1560 Q228,1560 228,1520 L228,1290 C228,1240 238,1205 288,1185 Z","#bfe3ea","#060303",34.0,"butt","round",1.0,0],["shape","M246,1380 L384,1380 L384,1520 Q384,1542 362,1542 L268,1542 Q246,1542 246,1520 Z","#7cc3d6",null,0,"butt","miter",1.0,0],["shape","M228,1300 L402,1300 L402,1360 L228,1360 Z","#e9e1c4","#060303",22.0,"butt","round",1.0,0],["shape","M282,1108 L348,1108 L348,1152 L282,1152 Z","#d23b2b","#060303",26.0,"butt","round",1.0,0],["shape","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z","#6c6a48","#060303",50.0,"butt","round",1.0,0],["clip","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z"],["shape","M370,1290 C450,1300 560,1305 700,1300 L700,1350 C560,1355 450,1350 370,1340 Z","#5a4630","#060303",16.0,"butt","round",1.0,0],["end"],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#060303",30.0,"butt","miter",1.0,0],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#9a9ca2",14.0,"butt","miter",1.0,0],["shape","M700,1120 C590,1200 470,1450 420,1700 L400,1880 L470,1960 L560,1905 L650,1985 L745,1920 L845,1995 L940,1930 L1035,1998 L1130,1925 L1225,1985 L1320,1910 L1410,1960 L1490,1870 C1460,1700 1400,1400 1332,1180 C1300,1140 1262,1120 1222,1110 Z","ana","#060303",50.0,"butt","round",1.0,0],["shape","M1180,1560 L1310,1548 L1318,1668 L1188,1680 Z","#7a5a3c","#060303",26.0,"butt","round",1.0,0],["shape","M720,1430 L860,1520 M860,1430 L720,1520",null,"#060303",74.0,"round","round",1.0,0],["shape","M720,1430 L860,1520 M860,1430 L720,1520",null,"#a7abb1",46.0,"round","round",1.0,0]],"body":[["shape","M392,1160 C360,1150 335,1135 318,1110",null,"#3d3226",14.0,"round","round",1.0,0],["shape","M290,1150 L340,1150 L342,1185 C392,1205 402,1240 402,1290 L402,1520 Q402,1560 362,1560 L268,1560 Q228,1560 228,1520 L228,1290 C228,1240 238,1205 288,1185 Z","#bfe3ea","#060303",34.0,"butt","round",1.0,0],["shape","M246,1380 L384,1380 L384,1520 Q384,1542 362,1542 L268,1542 Q246,1542 246,1520 Z","#7cc3d6",null,0,"butt","miter",1.0,0],["shape","M228,1300 L402,1300 L402,1360 L228,1360 Z","#e9e1c4","#060303",22.0,"butt","round",1.0,0],["shape","M282,1108 L348,1108 L348,1152 L282,1152 Z","#d23b2b","#060303",26.0,"butt","round",1.0,0],["shape","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z","#6c6a48","#060303",50.0,"butt","round",1.0,0],["clip","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z"],["shape","M370,1290 C450,1300 560,1305 700,1300 L700,1350 C560,1355 450,1350 370,1340 Z","#5a4630","#060303",16.0,"butt","round",1.0,0],["end"],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#060303",30.0,"butt","miter",1.0,0],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#9a9ca2",14.0,"butt","miter",1.0,0],["shape","M700,1120 C600,1180 540,1400 500,1700 L470,1990 L540,2042 L605,1996 L680,2052 L760,2000 L850,2058 L930,2006 L1010,2060 L1100,2008 L1180,2054 L1262,2002 L1340,2044 L1428,1986 C1410,1700 1392,1400 1332,1180 C1300,1140 1262,1120 1222,1110 Z","ana","#060303",50.0,"butt","round",1.0,0],["shape","M1180,1560 L1310,1548 L1318,1668 L1188,1680 Z","#7a5a3c","#060303",26.0,"butt","round",1.0,0],["shape","M720,1430 L860,1520 M860,1430 L720,1520",null,"#060303",74.0,"round","round",1.0,0],["shape","M720,1430 L860,1520 M860,1430 L720,1520",null,"#a7abb1",46.0,"round","round",1.0,0]],"hood":[["shape","M760,1185 C630,1100 590,860 625,640 C665,400 860,238 1075,236 C1305,236 1470,380 1510,600 C1542,780 1522,985 1450,1125 L1310,1195 Z","ana","#060303",50.0,"butt","round",1.0,0],["shape","M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z","#2a1d1c",null,0,"butt","miter",1.0,0]]};
+  const D = {"hole":"M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z","skin":[["shape",["E",1238.0,790.0,262.0,300.0],"#d9966b",null,0,"butt","miter",1.0,0]],"lids":[["shape","M1061,862 L1061,818.5 C1123.4,787.0 1166.6,787.0 1229,818.5 L1229,862 Z","#d9966b",null,0,"butt","miter",1.0,0],["shape","M1085,822.0 C1123.4,791.2 1166.6,791.2 1205,822.0",null,"#b06c48",14.0,"round","miter",1.0,0],["shape","M1269,850 L1269,806.7 C1328.4,777.0 1367.6,777.0 1427,806.7 L1427,850 Z","#d9966b",null,0,"butt","miter",1.0,0],["shape","M1293,810.0 C1328.4,780.96 1367.6,780.96 1403,810.0",null,"#b06c48",14.0,"round","miter",1.0,0]],"lidsH":[["shape","M1061,642 L1239,642 L1239,748.5 L1061,699.5 Z","#d9966b",null,0,"butt","miter",1.0,0],["shape","M1259,638 L1427,638 L1427,694.5 L1259,740.7 Z","#d9966b",null,0,"butt","miter",1.0,0]],"hair":[["shape","M960,470 C1080,430 1300,420 1460,480 L1440,550 C1400,585 1360,578 1335,552 C1320,595 1270,602 1235,565 C1210,605 1150,610 1120,568 C1090,602 1030,598 1010,560 C990,585 960,585 950,570 Z","#4a3426","#060303",14.0,"butt","round",1.0,0]],"brows":[["shape","M1075,640 C1110,604 1180,600 1222,624",null,"#060303",26.0,"round","round",1.0,0],["shape","M1288,628 C1322,602 1378,604 1410,628",null,"#060303",24.0,"round","round",1.0,0]],"browsH":[["shape","M1070,612 L1220,690",null,"#060303",40.0,"round","round",1.0,0],["shape","M1290,690 L1425,612",null,"#060303",38.0,"round","round",1.0,0]],"buff":[["shape","M900,985 C1050,935 1300,880 1455,836 C1490,880 1515,935 1530,990 L1540,1220 L900,1220 Z","#5b5e45","#060303",16.0,"butt","round",1.0,0],["shape","M1440,870 C1380,960 1290,1040 1190,1100",null,"#45472f",14.0,"round","round",1.0,0],["shape","M1490,930 C1460,1010 1420,1070 1360,1120",null,"#45472f",14.0,"round","round",1.0,0]],"rim":[["shape","M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z",null,"#060303",104.0,"butt","round",1.0,0],["shape","M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z",null,"ana",54.0,"butt","round",1.0,0]],"eyes":[[1145,752,54,70],[1348,744,49,66]],"bodyUcus":[["shape","M290,1150 L340,1150 L342,1185 C392,1205 402,1240 402,1290 L402,1520 Q402,1560 362,1560 L268,1560 Q228,1560 228,1520 L228,1290 C228,1240 238,1205 288,1185 Z","#bfe3ea","#060303",34.0,"butt","round",1.0,0],["shape","M246,1380 L384,1380 L384,1520 Q384,1542 362,1542 L268,1542 Q246,1542 246,1520 Z","#7cc3d6",null,0,"butt","miter",1.0,0],["shape","M228,1300 L402,1300 L402,1360 L228,1360 Z","#e9e1c4","#060303",22.0,"butt","round",1.0,0],["shape","M282,1108 L348,1108 L348,1152 L282,1152 Z","#d23b2b","#060303",26.0,"butt","round",1.0,0],["shape","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z","#6c6a48","#060303",50.0,"butt","round",1.0,0],["clip","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z"],["shape","M370,1290 C450,1300 560,1305 700,1300 L700,1350 C560,1355 450,1350 370,1340 Z","#5a4630","#060303",16.0,"butt","round",1.0,0],["end"],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#060303",30.0,"butt","miter",1.0,0],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#9a9ca2",14.0,"butt","miter",1.0,0],["shape","M700,1120 C590,1200 470,1450 420,1700 L400,1880 L470,1960 L560,1905 L650,1985 L745,1920 L845,1995 L940,1930 L1035,1998 L1130,1925 L1225,1985 L1320,1910 L1410,1960 L1490,1870 C1460,1700 1400,1400 1332,1180 C1300,1140 1262,1120 1222,1110 Z","ana","#060303",50.0,"butt","round",1.0,0]],"body":[["shape","M290,1150 L340,1150 L342,1185 C392,1205 402,1240 402,1290 L402,1520 Q402,1560 362,1560 L268,1560 Q228,1560 228,1520 L228,1290 C228,1240 238,1205 288,1185 Z","#bfe3ea","#060303",34.0,"butt","round",1.0,0],["shape","M246,1380 L384,1380 L384,1520 Q384,1542 362,1542 L268,1542 Q246,1542 246,1520 Z","#7cc3d6",null,0,"butt","miter",1.0,0],["shape","M228,1300 L402,1300 L402,1360 L228,1360 Z","#e9e1c4","#060303",22.0,"butt","round",1.0,0],["shape","M282,1108 L348,1108 L348,1152 L282,1152 Z","#d23b2b","#060303",26.0,"butt","round",1.0,0],["shape","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z","#6c6a48","#060303",50.0,"butt","round",1.0,0],["clip","M720,900 C540,895 405,960 392,1140 L380,1560 C380,1660 450,1700 560,1700 L700,1700 Z"],["shape","M370,1290 C450,1300 560,1305 700,1300 L700,1350 C560,1355 450,1350 370,1340 Z","#5a4630","#060303",16.0,"butt","round",1.0,0],["end"],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#060303",30.0,"butt","miter",1.0,0],["shape",["R",448.0,1284.0,52.0,72.0,8.0],null,"#9a9ca2",14.0,"butt","miter",1.0,0],["shape","M700,1120 C600,1180 540,1400 500,1700 L470,1990 L540,2042 L605,1996 L680,2052 L760,2000 L850,2058 L930,2006 L1010,2060 L1100,2008 L1180,2054 L1262,2002 L1340,2044 L1428,1986 C1410,1700 1392,1400 1332,1180 C1300,1140 1262,1120 1222,1110 Z","ana","#060303",50.0,"butt","round",1.0,0]],"hood":[["shape","M760,1185 C630,1100 590,860 625,640 C665,400 860,238 1075,236 C1305,236 1470,380 1510,600 C1542,780 1522,985 1450,1125 L1310,1195 Z","ana","#060303",50.0,"butt","round",1.0,0],["shape","M935,1085 C860,905 862,612 985,478 C1100,362 1335,378 1445,500 C1525,622 1528,900 1458,1062 C1355,1152 1060,1162 935,1085 Z","#2a1d1c",null,0,"butt","miter",1.0,0]]};
   const ALT_X = 950, ALT_Y = 2080, TEPE_Y = 211, BOY = ALT_Y - TEPE_Y;
   const GOZ_KAYMA = 18;   // göz bebeğinin bakış yönünde en fazla kayması (kaynak birimi)
 
@@ -3319,7 +3324,6 @@ const GASMER = (() => {
     } else {
       for (const [cx, cy, rx, ry] of D.eyes) {
         ctx.fillStyle = '#060303'; ctx.beginPath(); ctx.ellipse(cx + lx, cy + ly, rx, ry, 0, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(cx + lx + 16, cy + ly - 22, 16, 0, Math.PI * 2); ctx.fill();
       }
       run(ctx, o.hain ? P.lidsH : P.lids, ana);
     }
@@ -3957,21 +3961,26 @@ const AIM_Y = 11;           // silahın ve atışın çıktığı yükseklik: g�
 // Link haresi: karakterin silüeti iki kez büyütülür (halka = dış büyütme − iç büyütme), böylece kırmızı çizgi
 // gövdeden LINK_BOSLUK kadar uzakta durur ve kırmızı takımın panço rengine karışmaz. Yerel (UNIT_SCALE öncesi) birimlerle.
 const LINK_L = 44, LINK_K = 7, LINK_BOSLUK = 1.2, LINK_KALIN = 1.3;
-let linkCv = null;
-function linkHare(gop, t) {
-  if (!linkCv) linkCv = [0, 1].map(() => { const c = document.createElement('canvas'); c.width = c.height = LINK_L * LINK_K; return c; });
-  const [sil, hare] = linkCv, n = LINK_L * LINK_K, sx = sil.getContext('2d'), hx = hare.getContext('2d');
-  sx.setTransform(1, 0, 0, 1, 0, 0); sx.clearRect(0, 0, n, n);
-  sx.setTransform(LINK_K, 0, 0, LINK_K, n / 2, n * 0.74); GASMER.draw(sx, gop);
+const LINK_P = 7, LINK_PARLA = 30;   // resmin kenar payı (yerel birim) ve kırmızı parlamanın bulanıklığı (resim pikseli)
+const linkResim = {};
+// Halka karakterin silüetinden çıkar; silüet yalnız bakış yönüne bağlı, o yüzden iki resim yeter (sağa / sola)
+function linkResmi(yon) {
+  if (linkResim[yon]) return linkResim[yon];
+  const n = LINK_L * LINK_K, mk = m => { const c = document.createElement('canvas'); c.width = c.height = m; return c; };
+  const sil = mk(n), hare = mk(n), out = mk((LINK_L + 2 * LINK_P) * LINK_K);
+  const sx = sil.getContext('2d'), hx = hare.getContext('2d'), ox = out.getContext('2d');
+  sx.setTransform(LINK_K, 0, 0, LINK_K, n / 2, n * 0.74); GASMER.draw(sx, { x: 0, y: 0.5, boy: UNIT_DRAW_H, renk: '#000', yon });
   const buyut = (r) => { for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; hx.drawImage(sil, Math.cos(a) * r * LINK_K, Math.sin(a) * r * LINK_K); } };
-  hx.setTransform(1, 0, 0, 1, 0, 0); hx.globalCompositeOperation = 'source-over'; hx.clearRect(0, 0, n, n);
   buyut(LINK_BOSLUK + LINK_KALIN);
   hx.globalCompositeOperation = 'source-in'; hx.fillStyle = '#ff2a2a'; hx.fillRect(0, 0, n, n);
   hx.globalCompositeOperation = 'destination-out'; buyut(LINK_BOSLUK); hx.drawImage(sil, 0, 0);
-  hx.globalCompositeOperation = 'source-over';
-  const nabiz = 0.7 + 0.3 * Math.sin(t * 7);
-  ctx.save(); ctx.globalAlpha = nabiz; ctx.shadowColor = '#ff1a1a'; ctx.shadowBlur = 8 * cam.z;
-  ctx.drawImage(hare, -LINK_L / 2, -LINK_L * 0.74, LINK_L, LINK_L);
+  ox.shadowColor = '#ff1a1a'; ox.shadowBlur = LINK_PARLA; ox.drawImage(hare, LINK_P * LINK_K, LINK_P * LINK_K);
+  return (linkResim[yon] = out);
+}
+function linkHare(gop, t) {
+  const L = LINK_L + 2 * LINK_P;
+  ctx.save(); ctx.globalAlpha = 0.7 + 0.3 * Math.sin(t * 7);   // nabız
+  ctx.drawImage(linkResmi(gop.yon), -LINK_L / 2 - LINK_P, -LINK_L * 0.74 - LINK_P, L, L);
   ctx.restore();
 }
 function drawUnit(u, isActive, t) {
@@ -3981,7 +3990,6 @@ function drawUnit(u, isActive, t) {
   const wid = WEAPONS[tm.weapon] ? WEAPONS[tm.weapon].id : 'bazooka', punching = (u.punchT || 0) > 0;
   ctx.save(); ctx.translate(u.x, u.y); ctx.scale(UNIT_SCALE, UNIT_SCALE);
   // Hayatta kalan karakter (GASMER): takım rengi panço ve kapüşon, gözler nişana bakar
-  const lx = isActive ? Math.cos(u.aim) * f : f, ly = isActive ? Math.sin(u.aim) : 0;
   // Silah havada, gövde hizasında, karakterin önünde
   const silah = () => {
     const cevir = () => { ctx.translate(0, -AIM_Y / UNIT_SCALE); ctx.scale(f, 1); ctx.rotate(u.aim); ctx.scale(1 / UNIT_SCALE, 1 / UNIT_SCALE); };
@@ -4034,16 +4042,11 @@ function drawUnit(u, isActive, t) {
       ctx.restore();
     }
   };
-  // Durum tahmini (her ekranda yerel): can düşünce acı yüzü, hızlı düşerken panik, havadayken panço eteği uçuşur
+  // Can düşünce kısa süre acı yüzü (her ekranda yerel). Göz yönü, panik yüzü ve uçuş gövdesi oyundaki boyda seçilmediği için kaldırıldı
   if (u._hp === undefined) u._hp = u.hp;
   if (u.hp < u._hp) u._aci = t + 0.55;
   u._hp = u.hp;
-  if (u._pt !== undefined && t > u._pt) { const v = (u.y - u._py) / (t - u._pt); u._vy = (u._vy || 0) * 0.75 + clamp(v, -900, 900) * 0.25; }
-  u._py = u.y; u._pt = t;
-  const vy = u._vy || 0;
-  u._ucus = u._ucus ? Math.abs(vy) > 50 : Math.abs(vy) > 110;
-  const yuz = t < (u._aci || 0) ? 'aci' : vy > 320 ? 'panik' : undefined;
-  const gop = { x: 0, y: 0.5, boy: UNIT_DRAW_H, renk: tm.c, yon: f, bak: [lx, ly], hain: u.traitor, yuz, ucus: u._ucus };
+  const gop = { x: 0, y: 0.5, boy: UNIT_DRAW_H, renk: tm.c, yon: f, hain: u.traitor, yuz: t < (u._aci || 0) ? 'aci' : undefined };
   if (u.link) linkHare(gop, t);   // link kötü bir şey: karakterin şeklini izleyen, aradan boşluklu kırmızı hare
   GASMER.draw(ctx, gop);
   silah();
@@ -5092,7 +5095,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
-  get players() { return players; }, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
+  get players() { return players; }, GASMER, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
 
 // Açılış ekranının içeriği (logo ve GASMER bu noktada tanımlı)
