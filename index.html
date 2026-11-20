@@ -1471,6 +1471,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['19.2', '20 Kasım 2026', [
+    ['d', 'Daha az ısınma: oyun saniyede en çok 60 kare çizer (120 Hz ekranlı telefonlar gereksiz yere iki kat çiziyordu)'],
+    ['d', 'Ekran üstündeki yazı ve göstergeler yalnız değişince güncellenir'],
+  ]],
   ['19.1', '20 Kasım 2026', [
     ['d', 'Askerler maç başında toprağın içinde başlamaz'],
     ['y', 'Harita denetimi: bir telefonun haritası oda sahibininkinden farklı kalırsa doğru harita kendiliğinden yeniden gelir'],
@@ -3167,7 +3171,8 @@ function applyAct(m, slot) {
 // ---- Kamera ----
 const OV_PAD = 120;   // harita görünümünde üst + alt düğme şeritleri (px)
 let mapTop = 0;      // en yüksek toprağın 40 px üstü; genTerrain sonunda hesaplanır
-function viewSize() { return { vw: cv.clientWidth, vh: cv.clientHeight }; }
+let gorunum = null;   // karede bir kez ölçülür; frame() başında sıfırlanır
+function viewSize() { return gorunum || (gorunum = { vw: cv.clientWidth, vh: cv.clientHeight }); }
 function baseZoom() { const { vw, vh } = viewSize(); return Math.max(vh / 430, vw / 780); }
 let hadProj = false, pinching = false;
 function updateCam() {
@@ -4378,31 +4383,37 @@ function buildTeamsPanel() {
 }
 
 const ammoText = a => a < 0 ? '∞' : '×' + a;
+// HUD her karede hesaplanır ama sayfaya yalnız değişen değer yazılır (her karede DOM'a yazmak telefonu yoruyordu)
+function hud(el, k, v, f) { const c = el._hud || (el._hud = {}); if (c[k] === v) return; c[k] = v; f(v); }
+const metin = (el, v) => hud(el, 't', v, x => { el.textContent = x; });
+const stil = (el, p, v) => hud(el, p, v, x => el.style.setProperty(p, x));
+const sinif = (el, c, on) => hud(el, 'c:' + c, !!on, x => el.classList.toggle(c, x));
+const ETIKETLER = { portal: 'PORTAL', punch: 'VUR', airstrike: 'BOMBALA', lasso: 'KEMENT', revive: 'DİRİLT', beartrap: 'KUR', jet: 'JET', tape: 'BANT', whistle: 'DÜDÜK' };
 function updateHud() {
   if (!teams.length) return;
   for (const t of teams) {
     if (!t.bar) continue;
     const hp = t.units.reduce((s, u) => s + (u.alive ? u.hp : 0), 0);
-    t.bar.style.width = Math.min(100, hp / (t.units.length * 100) * 100) + '%';
-    t.row.classList.toggle('out', hp <= 0);
+    stil(t.bar, 'width', Math.min(100, hp / (t.units.length * 100) * 100).toFixed(1) + '%');
+    sinif(t.row, 'out', hp <= 0);
   }
   const kk = kaosTur ? benimKaos() : null;
   const t = kk ? teams[kk.ti] : team(), mine = kaosTur ? !!kk && state === 'kaos' && !kk.hazir : myTurn();
   if (!t) return;
-  $('turnName').textContent = kaosTur ? 'KAOS TURU' : t.name + (mode !== 'local' && mine ? ' · sen' : '');
-  $('turnDot').style.background = t.c;
+  metin($('turnName'), kaosTur ? 'KAOS TURU' : t.name + (mode !== 'local' && mine ? ' · sen' : ''));
+  stil($('turnDot'), 'background', t.c);
   const hb = $('hudBottom');
-  hb.classList.toggle('wait', !mine);
+  sinif(hb, 'wait', !mine);
   // Kürek seçiliyken çubuk kalan kazma hakkını gösterir, oklar kazar
   const shov = WEAPONS[t.weapon].id === 'shovel', canDig = digging ? digLeft > 0 : t.ammo[t.weapon] > 0;
-  hb.classList.toggle('nofuel', kaosTur || (shov ? !canDig : moveLeft <= 0));
-  hb.classList.toggle('nojump', kaosTur || (WEAPONS[t.weapon].id === 'jet' ? false : moveLeft < JUMP_COST));
-  hb.classList.toggle('digmode', shov);
-  $('fuelFill').style.width = (state === 'aim' ? (shov ? (canDig ? digLeft / DIG_MAX : 0) : moveLeft / MOVE_MAX) * 100 : 0) + '%';
+  sinif(hb, 'nofuel', kaosTur || (shov ? !canDig : moveLeft <= 0));
+  sinif(hb, 'nojump', kaosTur || (WEAPONS[t.weapon].id === 'jet' ? false : moveLeft < JUMP_COST));
+  sinif(hb, 'digmode', shov);
+  stil($('fuelFill'), 'width', (state === 'aim' ? (shov ? (canDig ? digLeft / DIG_MAX : 0) : moveLeft / MOVE_MAX) * 100 : 0).toFixed(1) + '%');
   const tm = $('timer');
   const sayan = state === 'aim' || (state === 'kaos' && !(kaos && kaos.perde));
-  tm.textContent = sayan ? Math.ceil(timer) : '…';
-  tm.classList.toggle('warn', sayan && timer < (state === 'kaos' ? 4 : 10));
+  metin(tm, sayan ? String(Math.ceil(timer)) : '…');
+  sinif(tm, 'warn', sayan && timer < (state === 'kaos' ? 4 : 10));
   // Son 5 saniye: her saniye tik, son saniyede daha tiz; süre biterse kısa bir düdük
   const sn = sayan ? Math.ceil(timer) : -1;
   if (sn !== sayacSon) {
@@ -4411,22 +4422,25 @@ function updateHud() {
     sayacSon = sn;
   }
   const wf = $('windFill');
-  wf.style.left = (wind < 0 ? 50 + wind * 50 : 50) + '%';
-  wf.style.width = Math.abs(wind) * 50 + '%';
-  $('windTxt').textContent = wind === 0 ? '0' : (wind < 0 ? '← ' : '') + Math.round(Math.abs(wind) * 10) + (wind > 0 ? ' →' : '');
-  $('bFire').style.setProperty('--p', kk ? (kk.ch ? kk.pw : 0) : input.charging ? input.power : 0);
+  stil(wf, 'left', (wind < 0 ? 50 + wind * 50 : 50) + '%');
+  stil(wf, 'width', Math.abs(wind) * 50 + '%');
+  metin($('windTxt'), wind === 0 ? '0' : (wind < 0 ? '← ' : '') + Math.round(Math.abs(wind) * 10) + (wind > 0 ? ' →' : ''));
+  const bf = $('bFire');
+  stil(bf, '--p', String(r2(kk ? (kk.ch ? kk.pw : 0) : input.charging ? input.power : 0)));
   const goat = state === 'fly' && projs.some(p => YURUYEN.has(p.type));
   const wid = WEAPONS[t.weapon].id;
   // Kürekle kazmaya başladıktan sonra ATEŞ açılır: basınca önceki silahla atış yapılır
   const shovelIdle = wid === 'shovel' && !digging;
-  $('fireLbl').textContent = goat ? 'PATLAT' : shovelIdle ? 'KÜREK' : ({ portal: 'PORTAL', punch: 'VUR', airstrike: 'BOMBALA', lasso: 'KEMENT', revive: 'DİRİLT', beartrap: 'KUR', jet: 'JET', tape: 'BANT', whistle: 'DÜDÜK' })[wid] || 'ATEŞ';
-  $('fireLbl').classList.toggle('sm', goat || shovelIdle || ['portal', 'airstrike', 'lasso', 'revive', 'whistle'].includes(wid));
+  const etiket = goat ? 'PATLAT' : shovelIdle ? 'KÜREK' : ETIKETLER[wid] || 'ATEŞ';
+  metin($('fireLbl'), etiket);
+  sinif($('fireLbl'), 'sm', goat || shovelIdle || ['portal', 'airstrike', 'lasso', 'revive', 'whistle'].includes(wid));
   ateşIkonu();
-  $('bFire').setAttribute('aria-label', $('fireLbl').textContent + ': basılı tut, bırak');
+  hud(bf, 'aria', etiket, x => bf.setAttribute('aria-label', x + ': basılı tut, bırak'));
   const benimOrdek = kaosTur && kk && state === 'fly' && projs.some(p => YURUYEN.has(p.type) && p.atan === kk.ui);
-  $('bFire').disabled = kaosTur ? !(mine || benimOrdek) : !mine || !(state === 'aim' || goat) || shovelIdle;
-  $('weaponName').textContent = wid === 'portal' ? 'Portal ' + (portalPending ? '2/2' : '1/2') : WEAPONS[t.weapon].name;
-  $('weaponAmmo').textContent = 'Silah · ' + ammoText(t.ammo[t.weapon]);}
+  hud(bf, 'dis', kaosTur ? !(mine || benimOrdek) : !mine || !(state === 'aim' || goat) || shovelIdle, x => { bf.disabled = x; });
+  metin($('weaponName'), wid === 'portal' ? 'Portal ' + (portalPending ? '2/2' : '1/2') : WEAPONS[t.weapon].name);
+  metin($('weaponAmmo'), 'Silah · ' + ammoText(t.ammo[t.weapon]));
+}
 
 function showBanner(text, color) {
   const b = $('banner'); b.textContent = ''; b.style.color = color || 'var(--paper)';
@@ -5104,7 +5118,12 @@ function adimSesi(dt) {
   adimX = a.x; adimY = a.y;
 }
 function inGameState() { return state !== 'menu' && state !== 'over'; }
+const KARE_MS = 1000 / 60;
+let sonrakiKare = 0;
 function frame(now) {
+  if (now < sonrakiKare - 3) { requestAnimationFrame(frame); return; }   // ekran 60 Hz'den hızlıysa bu kareyi çizme
+  sonrakiKare = now - sonrakiKare > KARE_MS ? now + KARE_MS : sonrakiKare + KARE_MS;
+  gorunum = null;
   const dt = Math.min(0.1, (now - last) / 1000); last = now;
   if (mode === 'client') clientTick(dt);
   else {
