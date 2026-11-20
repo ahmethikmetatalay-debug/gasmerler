@@ -1283,37 +1283,25 @@ function startGame(opts) {
 
 // ---- Asit Yağmuru: üç tur üst üste kimse hasar almazsa bir tur uyarı (hafif yağmur), sonra 2 sn yoğun yağış ----
 // Yağış gökyüzüne açık toprağı eritir (sivri tepeler yumuşar) ve açıkta duran askerlere 5-10 hasar verir.
-// Erime engebeleri düzleştirir: asit toprak ekleyemez, o yüzden tepeler çevresindeki çukurların seviyesine doğru kesilir.
-// Hedef yüzey = yumuşatılmış yüzey ile yumuşatılmış "dip" (çevredeki en alçak zemin) arasının ortası. Hedefin üstünde
-// kalan her şey erir, bir noktada en fazla ASIT_MAX px. Çukurlarda ve düz yerlerde yalnız ince bir kat (ASIT_ERI) erir.
-// Komşu sütunlar ancak aynı yüzeydeyse (aradaki fark ASIT_KOPUK'tan azsa) hesaba girer: yüzen ada zeminle karışmaz.
-const ASIT_SAKIN = 2, ASIT_SURE = 2, ASIT_ERI = 6, ASIT_MAX = 100, ASIT_PENCERE = 110, ASIT_KOPUK = 140;
+// Erime engebeleri korur ve yenilerini açar: yüzey kendi şeklini izleyerek aşağı iner (tepe tepe, oyuk oyuk kalır),
+// erime derinliği ise yer yer değişir: dalgalı bir "asit haritası" bazı yerlerde ince bir kat, bazı yerlerde derin
+// oyuklar açar. Her yağmurda harita farklıdır (host'un rng'si; erime aralıkları misafirlere aynen gider).
+// Bir noktada en çok ASIT_MAX px; yalnız gökyüzüne açık ilk toprak katmanı erir (mağara tavanı delinmez).
+const ASIT_SAKIN = 2, ASIT_SURE = 2, ASIT_ERI = 10, ASIT_MAX = 100, ASIT_TABAN = 10;
 let sakinTur = 0, hasarVar = false, asitDurum = null, asitT = 0, cizirtilar = [];
 function asitEritHesapla() {
-  const top = new Int32Array(W), out = [], bos = WATER - 2;
-  for (let x = 0; x < W; x++) { let y = 0; while (y < WATER && !solid[y * W + x]) y++; top[x] = y; }
-  // Aynı yüzeyde yürüyerek komşu: sütundan sütuna farkı ASIT_KOPUK'u geçmeyen kesintisiz bölge
-  const bolge = new Int32Array(W); let b = 0;
-  for (let x = 0; x < W; x++) { if (top[x] >= bos) { bolge[x] = -1; continue; } if (x === 0 || bolge[x - 1] < 0 || Math.abs(top[x] - top[x - 1]) > ASIT_KOPUK) b++; bolge[x] = b; }
-  const suz = (src, r, fn) => {   // bölge içinde kayan pencere: fn = 'ort' ya da 'dip'
-    const o = new Float32Array(W);
-    for (let x = 0; x < W; x++) {
-      if (bolge[x] < 0) { o[x] = src[x]; continue; }
-      let sum = 0, n = 0, mx = -1e9;
-      for (let xx = Math.max(0, x - r); xx <= Math.min(W - 1, x + r); xx++) { if (bolge[xx] !== bolge[x]) continue; sum += src[xx]; n++; if (src[xx] > mx) mx = src[xx]; }
-      o[x] = fn === 'dip' ? mx : sum / n;
-    }
-    return o;
-  };
-  const ort = suz(suz(top, ASIT_PENCERE, 'ort'), ASIT_PENCERE >> 1, 'ort');
-  const dip = suz(suz(top, ASIT_PENCERE, 'dip'), ASIT_PENCERE >> 1, 'ort');
+  const out = [], bos = WATER - 2;
+  // üç dalga boyunda (yaklaşık 50, 120, 300 px) rastgele evreli dalgaların toplamı: 0..1 arası yumuşak gürültü
+  const d = [[90, rng() * 6.28, 0.3], [180, rng() * 6.28, 0.4], [350, rng() * 6.28, 0.3]];   // geniş, yumuşak oyuklar (dar olunca sivri kuleler kalıyordu)
   for (let x = 0; x < W; x++) {
-    if (bolge[x] < 0) continue;
-    const hedef = (ort[x] + dip[x]) / 2;
-    const y1 = Math.min(top[x] + ASIT_MAX, Math.max(top[x] + ASIT_ERI, Math.floor(hedef)));
-    let y = top[x];
-    while (y < y1 && y < bos && solid[y * W + x]) y++;   // yalnız gökyüzüne açık ilk toprak katmanı (mağara tavanını delmez)
-    if (y > top[x]) out.push(x, top[x], y - top[x]);
+    let y = 0; while (y < WATER && !solid[y * W + x]) y++;
+    if (y >= bos) continue;
+    let n = 0; for (const [L, f, w] of d) n += w * (0.5 + 0.5 * Math.sin(x / L * 6.283 + f));
+    const derin = Math.round(ASIT_ERI + (ASIT_MAX - ASIT_ERI) * Math.pow(n, 2.5));   // çoğu yer ince, arada derin oyuklar
+    // İnce zemin (köprü, ada, kolon) delinip havada parça kalmasın: üstteki toprak katmanının en az ASIT_TABAN px'i kalır
+    let kalin = 0; while (y + kalin < bos && solid[(y + kalin) * W + x]) kalin++;
+    const sil = Math.min(derin, y + kalin >= bos ? derin : Math.max(0, kalin - ASIT_TABAN));
+    if (sil > 0) out.push(x, y, sil);
   }
   return out;
 }
@@ -1488,6 +1476,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['22.6', '20 Kasım 2026', [
+    ['d', 'Asit yağmuru araziyi düzleştirmez: yüzey şeklini koruyarak erir ve yer yer derin oyuklar açar (bir noktada en çok 100 px)'],
+  ]],
   ['22.5', '20 Kasım 2026', [
     ['y', 'Mezar taşı vuruş aldıkça çatlar (1 vuruşta bir, 2 vuruşta iki çatlak)'],
   ]],
