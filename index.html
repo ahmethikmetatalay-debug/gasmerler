@@ -945,7 +945,7 @@ const TEMA_PLASTIK = { ...TEMA };
 // ---- Arazi ----
 function isSolid(x, y) { x |= 0; y |= 0; if (x < 0 || x >= W || y < 0 || y >= H) return false; return solid[y * W + x] === 1 || (graves.length > 0 && mezarIci(x, y, null)); }
 // Büyük mezar taşı katı bir nesnedir: alt kısmı dikdörtgen, üstü yarım daire (orijin tabanın ortası)
-const MZ_W = 26.4, MZ_H = 35.2, MZ_R = MZ_W / 2;
+const MZ_W = 15.6, MZ_H = 20.8, MZ_R = MZ_W / 2;   // eski küçük mezar boyu (kullanıcı isteğiyle büyük taştan geri dönüldü)
 function mezarIci(x, y, haric) {
   for (const g of graves) {
     if (g === haric) continue;
@@ -1488,6 +1488,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['22.4', '20 Kasım 2026', [
+    ['d', 'Mezar taşları eski küçük hâline döndü; yine katı (içinden geçilmez, üstünden zıplanır)'],
+    ['d', 'Mezar taşı 3 vuruşta kırılır (önce 2)'],
+  ]],
   ['22.3', '20 Kasım 2026', [
     ['d', 'Güç toplama sesinin başı kesildi: ses 1,3 saniye sürer, güç dolduğu anda biter'],
   ]],
@@ -1752,7 +1756,7 @@ function kill(u) {
   }
   graves.push(g);
 }
-const MEZAR_HP = 40;
+const MEZAR_HP = 3;   // mezar vuruş sayar: erişen her patlama 1 vuruş, 3. vuruşta kırılır
 // ---- Ayı Kapanı: herkese görünür. Yerde yürüyerek ya da yere düşerek üstüne giren yakalanır (10 hasar, sırası biter) ----
 const KAPAN_DMG = 10, KAPAN_MAX = 2, KAPAN_GOSTER = 1.5;
 let kapanlar = [];
@@ -1816,7 +1820,7 @@ function diril(g, kimden) {
 function mezarHasar(x, y, r, dmg) {
   for (const g of graves) {
     const d = Math.hypot(g.x - x, g.y - MZ_H / 2 - y), R = r * 1.5;
-    if (d < R) g.hp -= Math.round(dmg * (0.35 + 0.65 * (1 - d / R)));
+    if (d < R) g.hp -= 1;
   }
   const kirik = graves.filter(g => g.hp <= 0);
   if (!kirik.length) return;
@@ -4369,7 +4373,13 @@ function renderIc(t) {
   ctx.drawImage(terr, 0, 0, W, H);
   for (const P of portals) drawPortal(P, t);
   drawAirTarget(t);
-  for (const g of graves) { ctx.save(); ctx.translate(g.x, g.y); YENI.mezar(ctx, g.c, g.hp < 20); ctx.restore(); }
+  for (const g of graves) {   // küçük mezar taşı (ilk sürümdeki çizim)
+    ctx.save(); ctx.translate(g.x, g.y); ctx.scale(1.3, 1.3);
+    ctx.fillStyle = '#b9b2c4'; ctx.strokeStyle = '#4b4458'; ctx.lineWidth = 1.2;
+    ctx.beginPath(); ctx.moveTo(-6, 0); ctx.lineTo(-6, -10); ctx.arc(0, -10, 6, Math.PI, 0); ctx.lineTo(6, 0); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = g.c; ctx.fillRect(-3, -4, 6, 2);
+    ctx.restore();
+  }
   for (const k of kapanlar) if (!k.kapali) { ctx.save(); ctx.translate(k.x, k.y + 1); YENI.ayiKapani(ctx, false); ctx.restore(); }
   for (const c of crates) drawCrate(c, t);
   for (const k of kokular) { ctx.save(); ctx.translate(k.x, k.y); YENI.kokuBulutu(ctx, k.t / 1.2); ctx.restore(); }
