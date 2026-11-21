@@ -1655,6 +1655,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['25.4', '21 Kasım 2026', [
+    ['d', 'Oda sahibinin telefonu daha az ısınır: ekranda hiçbir şey kıpırdamazken oyun durumu saniyede 30 yerine 4 kez gönderilir (hareket varken yine 30)'],
+  ]],
   ['25.3', '21 Kasım 2026', [
     ['d', 'Asit yağmuru: iki oyuncu üst üste kimseye hasar veremezse uyarı gelir; üçüncü oyuncu birine (kendine de olur, kalkana da) hasar verirse yağmur dağılır. Üç oyuncu üst üste veremezse yağar'],
     ['d', 'Güdümlü Roket başlangıçta yok: yalnız koli bandıyla (Bant + Bazuka + Sprey Jet) yapılır'],
@@ -3278,7 +3281,7 @@ function onHostData(conn, m) {
       back.conn = conn; back.gone = false; conn.slot = back.slot;
       send(conn, lobbyMsg(back));
       send(conn, { t: 'init', ...lastInit, carves: carveLog, you: back.slot });
-      send(conn, { t: 'turn', tt: turnTeam });
+      send(conn, { t: 'turn', tt: turnTeam }); snapTazele();
       if (state === 'over') send(conn, { t: 'over', w: winnerIdx, st: teams.map(statSatir) });
       toastAll(back.name + ' geri döndü');
       telsizListesi();
@@ -3297,7 +3300,7 @@ function onHostData(conn, m) {
   if (m.t === 'ab') { const p = players.find(p => p.conn === conn); if (p) arkaPlanda(p.slot, !!m.on, true); return; }
   if (m.t === 'senk') {   // misafirin haritası bozuk: haritayı ve patlama kaydını yeniden gönder
     const p = players.find(p => p.conn === conn);
-    if (p && inGame && lastInit) { send(conn, { t: 'init', ...lastInit, carves: carveLog, you: p.slot }); send(conn, { t: 'turn', tt: turnTeam }); }
+    if (p && inGame && lastInit) { send(conn, { t: 'init', ...lastInit, carves: carveLog, you: p.slot }); send(conn, { t: 'turn', tt: turnTeam }); snapTazele(); }
     return;
   }
   if (m.t === 'tk') { const p = players.find(p => p.conn === conn); if (p) { konusanGoster(p.slot, !!m.on); emit({ t: 'tk', s: p.slot, on: m.on ? 1 : 0 }); } return; }
@@ -3339,6 +3342,7 @@ function hostStart() {
   players[0].wn = myWorms.slice();
   lastInit = { seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, mode: lobbyMode, harita: lobbyHarita, yer: lobbyYer, teams: players.map(p => ({ name: p.name, slot: p.slot, wn: p.wn || [], side: sideNo(p.side) })), size: lobbySize };
   for (const p of players) send(p.conn, { t: 'init', ...lastInit, carves: [], you: p.slot });
+  snapTazele();
   haritaIleBaslat(lastInit);
 }
 
@@ -3353,6 +3357,21 @@ function backToLobby() {
 // Sırasız geldiği için eski kare yeniden sonra gelirse misafir onu sıra numarasından tanıyıp atar.
 let snapSeq = 0, lastSnapN = 0;
 const hizlar = new Map();   // misafirin peer id'si → hızlı kanal
+// Güncelleme sıklığı: anlık görüntü bir öncekinden farklıysa (bir şey hareket etti, nişan değişti) hemen gider;
+// aynıysa (herkes duruyor) en çok SNAP_BOS_MS'de bir gider (süre ve bağlantı canlı kalsın; misafir süreyi kendisi sayar).
+// Cephane (am) nadiren değişir: değişince 1 sn boyunca her görüntüde, sonra 3 sn'de bir gider (hızlı kanal kayıplı olabilir).
+const SNAP_BOS_MS = 250;
+let snapSayac = 0, snapBakildi = 0, sonSnapImza = '', amSon = '', amDegisti = 0, amGonderildi = 0;
+function snapTazele() { sonSnapImza = ''; amGonderildi = 0; }   // yeni/geri gelen misafir hemen tam görüntü alsın
+function snapGonder(now) {
+  const s = snapshot();
+  const amJ = JSON.stringify(s.am);
+  if (amJ !== amSon) { amSon = amJ; amDegisti = now; }
+  if (now - amDegisti > 1000 && now - amGonderildi < 3000) delete s.am; else amGonderildi = now;
+  const imza = JSON.stringify(s, (k, v) => (k === 'n' || k === 'tm') ? undefined : v);
+  if (imza === sonSnapImza && now - lastSnapSent < SNAP_BOS_MS) { snapSeq--; return; }
+  sonSnapImza = imza; lastSnapSent = now; snapSayac++; snapYolla(s);
+}
 function snapYolla(snap) {
   for (const p of players) { if (!p.conn) continue; const h = hizlar.get(p.conn.peer); send(h && h.open ? h : p.conn, snap); }
 }
@@ -5945,7 +5964,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 
 // Otomatik testler için iç duruma erişim; sadece adres ?test ile açılınca
 if (new URLSearchParams(location.search).has('test')) window.__t = {
-  get state() { return state; }, snapshot, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
+  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
@@ -5987,8 +6006,8 @@ function frame(now) {
     acc += dt; let n = 0;
     while (acc >= DT && n < 6) { step(); acc -= DT; n++; }
     if (n >= 6) acc = 0;
-    // Host saniyede ~30 kez oyunun durumunu herkese yollar
-    if (mode === 'host' && inGame && state !== 'menu' && now - lastSnapSent >= 33) { lastSnapSent = now; snapYolla(snapshot()); }
+    // Host saniyede ~30 kez bakar; değişen bir şey varsa yollar, hiçbir şey kıpırdamıyorsa saniyede 4 kez
+    if (mode === 'host' && inGame && state !== 'menu' && now - snapBakildi >= 33) { snapBakildi = now; snapGonder(now); }
   }
   updateFx(dt); adimSesi(dt);
   if (aktifHarita === 'hurda' && inGameState()) kabloZamani();
