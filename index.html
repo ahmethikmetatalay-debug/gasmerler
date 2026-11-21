@@ -52,6 +52,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 .hud > *{pointer-events:auto}
 .hud.bottom.wait .cluster button:not(#bMap),.hud.bottom.wait .fuel{opacity:.3;pointer-events:none}
 .hud.bottom.nofuel #bL,.hud.bottom.nofuel #bR,.hud.bottom.nojump #bJ{opacity:.35}
+.hud.bottom.yerlesim .movebox{visibility:hidden}.hud.bottom.yerlesim #bWeapon{pointer-events:none}
 .hud.bottom.digmode .fuel i{background:linear-gradient(90deg,#a8713c,#e9d3a8)}
 .hud.bottom.digmode #bL,.hud.bottom.digmode #bR{border-color:#a8713c}
 .hud.bottom.jetmod #bL,.hud.bottom.jetmod #bR{position:fixed;bottom:calc(max(10px,env(safe-area-inset-bottom,0px)) + 92px);border-color:#2f7fd8}
@@ -444,6 +445,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
           <span class="flabel">Harita</span>
           <div class="seg"><button id="lhPlastik" aria-pressed="true">Plastik Evrim</button><button id="lhHurda" aria-pressed="false">Hurda Gezegeni</button></div>
         </div>
+        <div class="field">
+          <span class="flabel">Başlangıç</span>
+          <div class="seg"><button id="lyRast" aria-pressed="true">Rastgele</button><button id="lyNomad" aria-pressed="false">Nomad</button></div>
+        </div>
         <button class="go" id="lobbyStart" hidden>Savaşı başlat</button>
         <button class="go" id="rejoinBtn" hidden>Maça geri dön</button>
         <p class="status" id="lobbyStatus"></p>
@@ -491,6 +496,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         <div class="field">
           <span class="flabel">Harita</span>
           <div class="seg"><button id="hPlastik" aria-pressed="true">Plastik Evrim</button><button id="hHurda" aria-pressed="false">Hurda Gezegeni</button></div>
+        </div>
+        <div class="field">
+          <span class="flabel">Başlangıç</span>
+          <div class="seg"><button id="yRast" aria-pressed="true">Rastgele</button><button id="yNomad" aria-pressed="false">Nomad</button></div>
         </div>
         <button class="go" id="startBtn">Savaşı başlat</button>
         </div>
@@ -575,7 +584,7 @@ const WEAPONS = [
   { id: 'portal', name: 'Portal Tabancası', desc: 'İki atışla iki portal aç. Güçlü atış daha uzağa gider' },
   { id: 'shovel', name: 'Kürek', desc: 'Sandıktan çıkar. Oklarla nişan yönüne tünel kaz' },
   { id: 'lasso', name: 'Kement', desc: 'Sandıktan çıkar, tek kullanımlık. Dümdüz giden iple uzaktaki sandığı çeker' },
-  { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (99 hasar)' },
+  { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (bomba başı 75 hasar)' },
   { id: 'jet', name: 'Sprey Jet', desc: 'Zıpla tuşunu basılı tut, uç. Sağ/sol ile yön ver. 3 sn yakıt, turu bitirmez' },
   { id: 'revive', name: 'Diriltme', desc: 'Mezarın dibinde ATEŞ: o asker 30 canla geri döner. Ardından atış yapılabilir' },
   { id: 'tape', name: 'Koli Bandı', desc: 'Silahları birbirine bantla: Roketli Ördek ya da Misketli Ördek' },
@@ -593,7 +602,7 @@ const WI = id => WEAPONS.findIndex(w => w.id === id);
 const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 0, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0, dynamite: 2, barricade: 2, swap: 1, drill: 0, guided: 0, sticky: 0, remote: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
 const LASSO_V = 900, LASSO_MAX = 650, LASSO_PULL = 420, LASSO_DMG = 15;   // kement: yerçekimsiz, dümdüz gider; sandığı çeker, rakibi kırbaçlar
 const JET_V = 420, JET_Y = 70, JET_LEAD = 2.6;       // F-16 hedefin üstüne ~2,6 sn'de gelir (ses 5 sn)
-const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 99, ABOMB_R = 44;
+const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 75, ABOMB_R = 44;
 const SETTLE_SHOT = 2;                               // atıştan sonra kamera vuruş yerinde bu kadar bekler (sn)
 const CRATE_WEAPONS = [WI('cluster'), WI('goat'), WI('portal')];
 const PUNCH_DMG = 10, PUNCH_REACH = 34;
@@ -618,7 +627,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v24-';
+const ID_PREFIX = 'gasmerler-v25-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -639,11 +648,11 @@ let digLeft = DIG_MAX, digging = false, digAcc = 0, digMark = 0, bubbles = [];
 let airTarget = null, shotThisTurn = false, settleAll = 0, camHold = null;
 const cam = { x: W / 2, y: H / 2, z: 1, user: 1, free: false };
 let input = { left: false, right: false, up: false, down: false, charging: false, power: 0, jet: false };
-const config = { teams: 2, size: 3, harita: 'plastik', names: TEAM_COLORS.map(t => t.name) };
+const config = { teams: 2, size: 3, harita: 'plastik', yer: 'rastgele', names: TEAM_COLORS.map(t => t.name) };
 
 // ---- Ağ durumu ----
 // 'local': tek telefon. 'host': oyunu yöneten telefon, fizik burada döner. 'client': hamlesini hosta yollar, görüntüyü ondan alır.
-let mode = 'local', peer = null, hostConn = null, mySlot = 0, players = [], lobbySize = 3, lobbyMode = 'ffa', lobbyTeams = 2, lobbyHarita = 'plastik', inGame = false, roomCode = '', lastInit = null, nmTimer = 0;
+let mode = 'local', peer = null, hostConn = null, mySlot = 0, players = [], lobbySize = 3, lobbyMode = 'ffa', lobbyTeams = 2, lobbyHarita = 'plastik', lobbyYer = 'rastgele', inGame = false, roomCode = '', lastInit = null, nmTimer = 0;
 let joinTimer = 0, pingTimer = 0, wnTimer = 0, joined = false, lastSnapSent = 0, lastSnapAt = 0, lastAimSent = 0, aimHoldUntil = 0, warnedStale = false, fxTick = 0;
 let myWorms = ['', '', '', ''];
 
@@ -1306,6 +1315,7 @@ function startGame(opts) {
   elektrikKur();
   for (const g of buryGoldCrates()) crates.push({ id: ++pid, x: g.x, y: g.y, vy: 0, para: false, k: 1 });
   gameMode = opts.mode === 'team' ? 'team' : 'ffa'; sidePtr = [-1, -1, -1];
+  nomad = opts.yer === 'nomad'; nomadOv = nomad; yerSira = []; yerI = 0;
   const size = clamp(opts.size | 0, 2, 4), list = opts.teams.slice(0, MAX_PLAYERS), cols = colorsFor(list, gameMode === 'team');
   list.forEach((tt, ti) => {
     const base = TEAM_COLORS[ti];
@@ -1323,21 +1333,104 @@ function startGame(opts) {
     const ti = k % teams.length, t = teams[ti], idx = t.units.length;
     const x = xs[k]?.x ?? (100 + k * 70), y = xs[k]?.y ?? surfaceY(x) ?? 200;
     const name = String(t.wn[idx] || '').trim().slice(0, 12) || WORM_NAMES[(ti * 4 + idx) % WORM_NAMES.length];
-    const u = { x, y, vx: 0, vy: 0, h: UNIT_H, grounded: true, hp: 100, alive: true, team: t, name, traitor: false, facing: x < W / 2 ? 1 : -1, aim: -0.5, isUnit: true };
+    const u = { x, y, vx: 0, vy: 0, h: UNIT_H, grounded: true, hp: 100, alive: !nomad, team: t, name, traitor: false, facing: x < W / 2 ? 1 : -1, aim: -0.5, isUnit: true };
     for (let k = 0; k < 300 && !bodyFree(u.x, u.y, u.h); k++) u.y--;   // asla toprağın içinde başlamasın
     t.units.push(u); units.push(u);
   }
   turnTeam = (Math.floor(rng() * teams.length) + teams.length - 1) % teams.length;
+  // Nomad: yerleştirme sırası atış sırası gibidir; her tur her oyuncu bir askerini koyar
+  if (nomad) for (let r = 0; r < size; r++) for (let j = 0; j < teams.length; j++) yerSira.push(teams[(turnTeam + 1 + j) % teams.length].units[r]);
   buildTeamsPanel();
   $('menu').hidden = true; $('over').hidden = true;
   $('hudTop').hidden = false; $('hudBottom').hidden = false; $('bMic').hidden = mode === 'local';
   document.body.classList.add('playing');
-  overview = false; $('bMap').classList.remove('on');
+  overview = nomad; $('bMap').classList.toggle('on', nomad);   // Nomad: yer seçilirken harita bütün görünür
   cam.x = W / 2; cam.y = H / 2; cam.free = false;
   keepAwake(); Sound.music(false); Sound.ortam(aktifHarita === 'hurda' ? 'ortamHurda' : null); kabloT = 0;
   Sound.yukle('kablo');   // Hurda'da kablo cızırtısı, her haritada diriltme
   if (mode === 'client') { state = 'wait'; lastSnapAt = performance.now(); warnedStale = false; }
+  else if (nomad) yerSonraki();
   else nextTurn();
+}
+
+// ---- Nomad modu: maç başında askerler sahada yoktur. Oyuncular atış sırası gibi sırayla askerlerini istedikleri yere koyar ----
+// Sırası gelen haritaya dokunur (hayalet asker görünür), ateş düğmesiyle yerleştirir. 15 sn dolarsa seçtiği yere,
+// seçmediyse ya da seçtiği yer uygun değilse rastgele bir yere iner. Herkes yerleşince normal sıra başlar.
+const YER_SURE = 15;
+let nomad = false, nomadOv = false, yerSira = [], yerI = 0;
+function yerSonraki() {
+  while (yerI < yerSira.length && yerSira[yerI].alive) yerI++;
+  if (yerI >= yerSira.length) { nomadBitti(); return; }
+  const u = yerSira[yerI];
+  turnTeam = teams.indexOf(u.team); active = u;
+  timer = YER_SURE; state = 'yerles'; airTarget = null; shotThisTurn = false;
+  input.charging = false; input.power = 0; input.left = input.right = input.up = input.down = input.jet = false;
+  closeWeaponMenu();
+  emit({ t: 'yer', tt: turnTeam });
+  yerIlan();
+}
+function yerIlan() {
+  const t = team(); if (!t) return;
+  const mine = myTurn();
+  showBanner(mode === 'local' ? t.name + ' yerleştiriyor' : mine ? 'Askerini yerleştir!' : 'Yerleştiriyor: ' + t.name, t.c);
+  if (mine && mode !== 'local') { buzz(120); Sound.sample('sira') || Sound.play('turn'); }
+  if (mine && units.filter(u => u.alive).length < teams.length) toast('Haritada bir yere dokun, ateş düğmesiyle askerini oraya indir');
+}
+function nomadBitti() {
+  turnTeam = (teams.indexOf(yerSira[0].team) + teams.length - 1) % teams.length;   // ilk yerleştiren ilk atar
+  for (const t of teams) t.cur = -1;
+  airTarget = null;
+  nextTurn();
+}
+// Dokunulan yerin altındaki zemin (havaya dokunulduysa aşağı düşer, toprağa dokunulduysa yüzeye çıkar). Uygun değilse null.
+function yerBul(x, y) {
+  x = clamp(Math.round(x), 16, W - 16); y = Math.round(clamp(y, 0, WATER));
+  if (isSolid(x, y)) { let k = 0; while (k < 50 && y > 0 && isSolid(x, y)) { y--; k++; } if (isSolid(x, y)) return null; }
+  while (y < WATER && !isSolid(x, y + 1)) y++;
+  if (y > WATER - 24) return null;   // altında zemin yok ya da suya çok yakın
+  for (let k = 0; k < 40 && !bodyFree(x, y, UNIT_H); k++) y--;
+  if (!bodyFree(x, y, UNIT_H)) return null;
+  if (units.some(o => o.alive && Math.hypot(o.x - x, o.y - y) < 26)) return null;   // başka askerin üstüne konmaz
+  return { x, y };
+}
+function rastgeleYer() {
+  for (let tries = 0; tries < 400; tries++) {
+    const x = 80 + rng() * (W - 160), fl = aktifHarita === 'hurda' ? floorsAt(x) : [surfaceY(x)], y = fl[Math.floor(rng() * fl.length)];
+    if (y == null) continue;
+    const p = yerBul(x, y - 2);
+    if (p && (tries > 200 || !units.some(o => o.alive && Math.hypot(o.x - p.x, o.y - p.y) < 70))) return p;
+  }
+  return yerBul(W / 2, 0) || { x: W / 2, y: surfaceY(W / 2) ?? 200 };
+}
+function yerFx(x, y) {
+  Sound.sample('portalGec') || Sound.play('portal');
+  for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, s = 30 + Math.random() * 90; parts.push({ kind: 'spark', c: PORTAL_COLORS[0], x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, g: 0, size: 2 + Math.random() * 2, life: 0.5, max: 0.5 }); }
+}
+function yerlestir(h, zorla) {
+  if (state !== 'yerles' || !active || active.alive) return;
+  let p = h ? yerBul(h.x, h.y) : null;
+  if (!p) { if (!zorla) { uyari(h ? 'Buraya asker konamaz' : 'Önce haritada bir yere dokun'); return; } p = rastgeleYer(); }
+  const u = active;
+  u.x = p.x; u.y = p.y; u.vx = 0; u.vy = 0; u.grounded = true; u.alive = true; u.hp = 100; u.facing = u.x < W / 2 ? 1 : -1;
+  yerFx(u.x, u.y - UNIT_H / 2); emit({ t: 'pt', x: r1(u.x), y: r1(u.y - UNIT_H / 2), i: 0 });
+  yerI++; yerSonraki();
+}
+// Sırası gelenin seçtiği yerde yarı saydam hayalet asker; uygun olmayan yerde kırmızı çarpı
+function yerHayalCiz(t) {
+  const u = active; if (state !== 'yerles' || !u || u.alive || !airTarget) return;
+  const p = yerBul(airTarget.x, airTarget.y);
+  if (!p) {
+    ctx.save(); ctx.translate(airTarget.x, airTarget.y); ctx.strokeStyle = '#ff4a3d'; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(-9, -9); ctx.lineTo(9, 9); ctx.moveTo(9, -9); ctx.lineTo(-9, 9); ctx.stroke(); ctx.restore();
+    return;
+  }
+  const ox = u.x, oy = u.y, of = u.facing;
+  u.x = p.x; u.y = p.y; u.alive = true; u.facing = p.x < W / 2 ? 1 : -1;
+  ctx.save(); ctx.globalAlpha = 0.5 + 0.2 * Math.sin(t * 6);
+  try { drawUnit(u, false, t); } finally { ctx.restore(); u.x = ox; u.y = oy; u.alive = false; u.facing = of; }
+  // üstünde aşağı bakan ok
+  ctx.save(); ctx.translate(p.x, p.y - UNIT_H - 16 + Math.sin(t * 5) * 3); ctx.fillStyle = u.team.c; ctx.strokeStyle = '#060303'; ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(-8, -10); ctx.lineTo(8, -10); ctx.lineTo(0, 2); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore();
 }
 
 // ---- Asit Yağmuru: üç tur üst üste kimse hasar almazsa bir tur uyarı (hafif yağmur), sonra 2 sn yoğun yağış ----
@@ -1494,6 +1587,7 @@ function announceTurn() {
   const t = team(); if (!t) return;
   const mine = mode !== 'local' && myTurn();
   cam.free = false; camHold = null;
+  if (nomadOv) { nomadOv = false; overview = false; $('bMap').classList.remove('on'); }   // Nomad yerleştirmesi bitti
   showBanner(mine ? 'Sıra sende!' : 'Sıra: ' + t.name, t.c);
   if (mine) { buzz(180); Sound.sample('sira') || Sound.play('turn'); }
 }
@@ -1554,6 +1648,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['25', '21 Kasım 2026', [
+    ['y', 'Nomad modu: oyun kurulurken Başlangıç > Nomad seçilirse askerler haritada olmadan başlanır; oyuncular sırayla (atış sırası gibi) askerlerini istedikleri yere koyar, her yerleştirme 15 saniye'],
+    ['d', 'Hele İki Gözüm: her bomba 75 hasar (99 idi)'],
+  ]],
   ['24', '21 Kasım 2026', [
     ['y', 'Koli bandı tarifi Delici Roket (Bant + Bazuka + Kürek): toprağa girince patlamaz, ~3 asker boyu tünel açar, sonra patlar'],
     ['y', 'Koli bandı tarifi Güdümlü Roket (Bant + Bazuka + Sprey Jet): atıldıktan sonra 3 sn sağ/sol ile yönlendirilir'],
@@ -2955,6 +3053,10 @@ function step() {
   if (state === 'menu' || state === 'over' || state === 'wait') return;
   if (state === 'asit') asitAdim();
   if (state === 'kaos') kaosAdim();
+  if (state === 'yerles') {
+    timer -= DT;
+    if (timer <= 0 || (teamGone(team()) && YER_SURE - timer > 1)) { timer = 0; yerlestir(airTarget, true); }   // süre bitti ya da oyuncu koptu
+  }
   if (state === 'aim') {
     timer -= DT;
     if (timer <= 0) { timer = 0; endTurn(); }
@@ -3102,7 +3204,7 @@ function teamGone(t) {
 }
 function cleanNames(a) { return Array.isArray(a) ? a.slice(0, 4).map(s => String(s || '').trim().slice(0, 12)) : []; }
 
-function lobbyMsg(p) { return { t: 'lobby', players: players.map(x => ({ name: x.name, slot: x.slot, side: sideNo(x.side) })), you: p.slot, size: lobbySize, mode: lobbyMode, nteam: lobbyTeams, harita: lobbyHarita, code: roomCode }; }
+function lobbyMsg(p) { return { t: 'lobby', players: players.map(x => ({ name: x.name, slot: x.slot, side: sideNo(x.side) })), you: p.slot, size: lobbySize, mode: lobbyMode, nteam: lobbyTeams, harita: lobbyHarita, yer: lobbyYer, code: roomCode }; }
 function broadcastLobby() { for (const p of players) send(p.conn, lobbyMsg(p)); }
 
 function hostRoom() {
@@ -3208,7 +3310,7 @@ function hostStart() {
   goFullscreen();
   inGame = true;
   players[0].wn = myWorms.slice();
-  lastInit = { seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, mode: lobbyMode, harita: lobbyHarita, teams: players.map(p => ({ name: p.name, slot: p.slot, wn: p.wn || [], side: sideNo(p.side) })), size: lobbySize };
+  lastInit = { seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, mode: lobbyMode, harita: lobbyHarita, yer: lobbyYer, teams: players.map(p => ({ name: p.name, slot: p.slot, wn: p.wn || [], side: sideNo(p.side) })), size: lobbySize };
   for (const p of players) send(p.conn, { t: 'init', ...lastInit, carves: [], you: p.slot });
   haritaIleBaslat(lastInit);
 }
@@ -3295,7 +3397,7 @@ function onClientData(m) {
     case 'lobby':
       players = Array.isArray(m.players) ? m.players.slice(0, MAX_PLAYERS).map(p => ({ name: String(p.name).slice(0, 14), slot: p.slot | 0, side: sideNo(p.side) })) : [];
       lobbyTeams = m.nteam === 3 ? 3 : 2;
-      mySlot = m.you | 0; lobbySize = clamp(m.size | 0, 2, 4); lobbyMode = m.mode === 'team' ? 'team' : 'ffa'; lobbyHarita = m.harita === 'hurda' ? 'hurda' : 'plastik'; roomCode = String(m.code || roomCode).slice(0, 4); inGame = false;
+      mySlot = m.you | 0; lobbySize = clamp(m.size | 0, 2, 4); lobbyMode = m.mode === 'team' ? 'team' : 'ffa'; lobbyHarita = m.harita === 'hurda' ? 'hurda' : 'plastik'; lobbyYer = m.yer === 'nomad' ? 'nomad' : 'rastgele'; roomCode = String(m.code || roomCode).slice(0, 4); inGame = false;
       if (lobbyHarita === 'hurda') HARITA_HURDA_PNG.yukle().catch(() => {});
       $('joinGo').disabled = false;
       if (state !== 'menu') exitToMenuUI();
@@ -3313,6 +3415,7 @@ function onClientData(m) {
       break;
     case 's': if (inGame && teams.length && state !== 'menu') { if (m.n && m.n <= lastSnapN) break; lastSnapN = m.n | 0; applySnap(m); } break;
     case 'turn': if (!teams.length) break; turnTeam = m.tt | 0; closeWeaponMenu(); announceTurn(); break;
+    case 'yer': if (!teams.length) break; turnTeam = m.tt | 0; closeWeaponMenu(); yerIlan(); break;
     case 'x': if (inGame && terr) explodeFx(+m.x, +m.y, +m.r, m.s === 'elBomba' ? 'elBomba' : undefined); break;
     case 'sp': if (inGame) splashFx(+m.x, +m.y); break;
     case 'bo': if (inGame) bounceFx(); break;
@@ -3395,7 +3498,7 @@ function applySnap(s) {
 
 const STATIK_MERMI = new Set(['dirilt', 'patlat']);   // vx/vy alanında hız değil hedef taşır
 function clientTick(dt) {
-  if (state === 'aim' || state === 'kaos') timer = Math.max(0, timer - dt);
+  if (state === 'aim' || state === 'kaos' || state === 'yerles') timer = Math.max(0, timer - dt);
   const k = Math.min(1, dt * 14);
   for (const u of units) if (u.tx !== undefined) { u.x += (u.tx - u.x) * k; u.y += (u.ty - u.y) * k; }
   const now = performance.now(), since = Math.min(0.08, (now - lastSnapAt) / 1000);
@@ -3617,6 +3720,9 @@ function applyAct(m, slot, dogrudan) {
       if (state === 'aim' && active && team() && WEAPONS[team().weapon].id === 'barricade' && Number.isFinite(m.x) && Number.isFinite(m.y)) { const g = barikatHayal(team(), active); g.x = clamp(m.x, 10, W - 10); g.y = clamp(m.y, -150, WATER - 6); }
       break;
     case 'w': selectWeapon(m.i | 0); break;
+    case 'yh':   // Nomad: yerleştirme yeri
+      if (state === 'yerles' && Number.isFinite(m.x) && Number.isFinite(m.y)) airTarget = { x: clamp(m.x, 16, W - 16), y: clamp(m.y, 0, WATER) };
+      break;
     case 'tg':   // Hele İki Gözüm hedefi
       if (state === 'aim' && team() && WEAPONS[team().weapon].id === 'airstrike' && Number.isFinite(m.x) && Number.isFinite(m.y))
         airTarget = { x: clamp(m.x, 30, W - 30), y: clamp(m.y, 0, H) };
@@ -3646,6 +3752,7 @@ function updateCam() {
     else if (fp && fp.type === 'jet' && airTarget) { tx = airTarget.x; ty = (surfaceY(airTarget.x) ?? H / 2) - 90; }
     else if (fp && !(state === 'aim' && kacis && active)) { tx = fp.x; ty = fp.y; }   // kaçarken kamera askerde
     else if (state === 'settle' && camHold) { tx = camHold.x; ty = camHold.y; }
+    else if (state === 'yerles') { /* yer seçerken kamera kıpırdamaz */ }
     else if (state === 'kaos' && kaosBirimim()) { const b = kaosBirimim(); tx = b.x; ty = b.y - 50; }
     else if (active) { tx = active.x; ty = active.y - 50; }
     cam.x += (tx - cam.x) * 0.12; cam.y += (ty - cam.y) * 0.12;
@@ -4858,6 +4965,7 @@ function renderIc(t) {
   ctx.drawImage(terr, 0, 0, W, H);
   for (const P of portals) drawPortal(P, t);
   drawAirTarget(t);
+  if (state === 'yerles') yerHayalCiz(t);
   for (const g of graves) {   // küçük mezar taşı (ilk sürümdeki çizim)
     ctx.save(); ctx.translate(g.x, g.y); ctx.scale(1.3, 1.3);
     ctx.fillStyle = g.c; ctx.strokeStyle = '#060303'; ctx.lineWidth = 1.2;   // gövde ölenin takım renginde (küçük etiket telefonda seçilmiyordu)
@@ -5045,7 +5153,7 @@ function updateHud() {
   if (!teams.length) return;
   for (const t of teams) {
     if (!t.bar) continue;
-    const hp = t.units.reduce((s, u) => s + (u.alive ? u.hp : 0), 0);
+    const hp = state === 'yerles' ? t.units.length * 100 : t.units.reduce((s, u) => s + (u.alive ? u.hp : 0), 0);   // yerleşmeyi bekleyen asker ölü değildir
     stil(t.bar, 'width', Math.min(100, hp / (t.units.length * 100) * 100).toFixed(1) + '%');
     sinif(t.row, 'out', hp <= 0);
   }
@@ -5064,10 +5172,12 @@ function updateHud() {
   sinif(hb, 'nofuel', shov ? !canDig : ML <= 0);
   sinif(hb, 'nojump', WEAPONS[t.weapon].id === 'jet' ? false : ML < JUMP_COST);
   sinif(hb, 'digmode', shov);
+  const yer = state === 'yerles';
+  sinif(hb, 'yerlesim', yer);
   sinif(hb, 'jetmod', DOKUNMATIK && (WEAPONS[t.weapon].id === 'jet' || (kk ? kjk(kk) : jetKul)));   // iki elle uçuş: zıpla solda, yön sağda
   stil($('fuelFill'), 'width', (oyunda ? (shov ? (canDig ? DL / DIG_MAX : 0) : ML / MOVE_MAX) * 100 : 0).toFixed(1) + '%');
   const tm = $('timer');
-  const sayan = state === 'aim' || (state === 'kaos' && !(kaos && kaos.perde));
+  const sayan = state === 'aim' || yer || (state === 'kaos' && !(kaos && kaos.perde));
   metin(tm, sayan ? String(Math.ceil(timer)) : '…');
   sinif(tm, 'warn', sayan && timer < 10);
   // Son 5 saniye: her saniye tik, son saniyede daha tiz; süre biterse kısa bir düdük
@@ -5092,7 +5202,8 @@ function updateHud() {
   sinif($('fireLbl'), 'sm', goat || shovelIdle || ['portal', 'airstrike', 'lasso', 'revive', 'whistle'].includes(wid));
   ateşIkonu();
   hud(bf, 'aria', etiket, x => bf.setAttribute('aria-label', x + ': basılı tut, bırak'));
-  hud(bf, 'dis', kaosTur ? !(mine || ordekBende) : !mine || !(state === 'aim' || goat) || shovelIdle || (kacis && state === 'aim'), x => { bf.disabled = x; });
+  hud(bf, 'dis', yer ? !mine : kaosTur ? !(mine || ordekBende) : !mine || !(state === 'aim' || goat) || shovelIdle || (kacis && state === 'aim'), x => { bf.disabled = x; });
+  if (yer) { metin($('weaponName'), 'Yerleştir'); metin($('weaponAmmo'), 'Asker ' + Math.min(units.length, units.filter(u => u.alive).length + 1) + '/' + units.length); return; }
   metin($('weaponName'), wid === 'portal' ? 'Portal ' + ((kk ? kk.p1 : portalPending) ? '2/2' : '1/2') : WEAPONS[t.weapon].name);
   metin($('weaponAmmo'), 'Silah · ' + ammoText(t.ammo[t.weapon]));
 }
@@ -5134,6 +5245,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 // ---- Girdi (oyun mantığı: local ve host'ta çalışır) ----
 function firePress() {
+  if (state === 'yerles') { yerlestir(airTarget, false); return; }
   if (state === 'fly') { const g = projs.find(p => YURUYEN.has(p.type)); if (g) g.fuse = 0; return; }
   if (state !== 'aim' || !active || !active.alive) return;
   closeWeaponMenu();
@@ -5334,6 +5446,7 @@ function openWeaponMenu() {
 function closeWeaponMenu() { $('weaponMenu').hidden = true; $('bantPanel').hidden = true; }
 
 function canAim() {
+  if (state === 'yerles') return myTurn();
   if (kaosTur) { const k = benimKaos(), u = kaosBirimim(); return state === 'kaos' && !!k && !k.hazir && !kc(k) && !!u && u.alive; }
   return state === 'aim' && active && active.alive && !input.charging && myTurn();
 }
@@ -5341,6 +5454,14 @@ function aimAt(e) {
   if (!canAim()) return;
   const r = cv.getBoundingClientRect();
   const [wx, wy] = toWorld(e.clientX - r.left, e.clientY - r.top);
+  if (state === 'yerles') {   // Nomad: dokunulan yer askerin ineceği yer
+    const x = clamp(wx, 16, W - 16), y = clamp(wy, 0, WATER);
+    if (mode !== 'client') { act('yh', { x, y }); return; }
+    airTarget = { x, y };
+    const now = performance.now(); aimHoldUntil = now + 400;
+    if (now - lastAimSent >= 45) { lastAimSent = now; act('yh', { x, y }); }
+    return;
+  }
   // Hele İki Gözüm seçiliyse dokunulan yer bombalama hedefi olur
   const T = hudTakim();
   if (T && WEAPONS[T.weapon].id === 'airstrike') {
@@ -5415,7 +5536,8 @@ function ptrEnd(e) {
   if (ptrs.size < 2) { pinch = null; pinching = false; }
   if (ptrs.size === 0) {
     if (aiming && mode === 'client' && canAim()) {
-      if (hudTakim() && WEAPONS[hudTakim().weapon].id === 'airstrike') { if (airTarget) act('tg', { x: airTarget.x, y: airTarget.y }); }
+      if (state === 'yerles') { if (airTarget) act('yh', { x: airTarget.x, y: airTarget.y }); }
+      else if (hudTakim() && WEAPONS[hudTakim().weapon].id === 'airstrike') { if (airTarget) act('tg', { x: airTarget.x, y: airTarget.y }); }
       else { const a = nisanBirimi(); act('aim', { f: a.facing, v: a.aim }); }
     }
     aiming = false; pan = null;
@@ -5538,6 +5660,8 @@ function renderLobby(msg) {
   $('lt2').disabled = $('lt3').disabled = !host;
   $('lhPlastik').setAttribute('aria-pressed', String(lobbyHarita === 'plastik')); $('lhHurda').setAttribute('aria-pressed', String(lobbyHarita === 'hurda'));
   $('lhPlastik').disabled = $('lhHurda').disabled = !host;
+  $('lyRast').setAttribute('aria-pressed', String(lobbyYer !== 'nomad')); $('lyNomad').setAttribute('aria-pressed', String(lobbyYer === 'nomad'));
+  $('lyRast').disabled = $('lyNomad').disabled = !host;
   [2, 3, 4].forEach(n => { const b = $('ls' + n); b.setAttribute('aria-pressed', String(n === lobbySize)); b.disabled = !host; });
   $('lobbyStart').hidden = !host; $('lobbyStart').disabled = players.length < 2 || !roomCode || !sidesReady();
   $('lobbyStatus').textContent = msg || (host
@@ -5637,7 +5761,7 @@ buildNames();
 
 function localStart() {
   goFullscreen(); teardown();
-  haritaIleBaslat({ seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, harita: config.harita, teams: config.names.slice(0, config.teams).map(name => ({ name })), size: config.size });
+  haritaIleBaslat({ seed: (Date.now() ^ (Math.random() * 1e9)) >>> 0, harita: config.harita, yer: config.yer, teams: config.names.slice(0, config.teams).map(name => ({ name })), size: config.size });
 }
 
 const SND_ON = '<svg viewBox="0 0 24 24"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7M19 6a8.5 8.5 0 0 1 0 12"/></svg>';
@@ -5674,6 +5798,13 @@ $('hPlastik').addEventListener('click', () => setLocalHarita('plastik'));
 $('hHurda').addEventListener('click', () => setLocalHarita('hurda'));
 $('lhPlastik').addEventListener('click', () => setLobbyHarita('plastik'));
 $('lhHurda').addEventListener('click', () => setLobbyHarita('hurda'));
+// Başlangıç: Rastgele (askerler haritaya dağıtılır) ya da Nomad (oyuncular sırayla kendileri yerleştirir)
+function setLocalYer(y) { config.yer = y; $('yRast').setAttribute('aria-pressed', String(y !== 'nomad')); $('yNomad').setAttribute('aria-pressed', String(y === 'nomad')); }
+function setLobbyYer(y) { if (mode !== 'host') return; lobbyYer = y; renderLobby(); broadcastLobby(); }
+$('yRast').addEventListener('click', () => setLocalYer('rastgele'));
+$('yNomad').addEventListener('click', () => setLocalYer('nomad'));
+$('lyRast').addEventListener('click', () => setLobbyYer('rastgele'));
+$('lyNomad').addEventListener('click', () => setLobbyYer('nomad'));
 $('leaveBtn').addEventListener('click', leaveRoom);
 // Menüdeki geri ok: bulunulan ekrana göre bir önceki ekrana
 $('statsBtn').addEventListener('click', () => showView('vStats'));
@@ -5784,7 +5915,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 
 // Otomatik testler için iç duruma erişim; sadece adres ?test ile açılınca
 if (new URLSearchParams(location.search).has('test')) window.__t = {
-  get state() { return state; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
+  get state() { return state; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
