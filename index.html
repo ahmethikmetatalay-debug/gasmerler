@@ -584,7 +584,7 @@ const WEAPONS = [
   { id: 'portal', name: 'Portal Tabancası', desc: 'İki atışla iki portal aç. Güçlü atış daha uzağa gider' },
   { id: 'shovel', name: 'Kürek', desc: 'Sandıktan çıkar. Oklarla nişan yönüne tünel kaz' },
   { id: 'lasso', name: 'Kement', desc: 'Sandıktan çıkar, tek kullanımlık. Dümdüz giden iple uzaktaki sandığı çeker' },
-  { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (bomba başı 75 hasar)' },
+  { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (bomba başı 25 hasar)' },
   { id: 'jet', name: 'Sprey Jet', desc: 'Zıpla tuşunu basılı tut, uç. Sağ/sol ile yön ver. 3 sn yakıt, turu bitirmez' },
   { id: 'revive', name: 'Diriltme', desc: 'Mezarın dibinde ATEŞ: o asker 30 canla geri döner. Ardından atış yapılabilir' },
   { id: 'tape', name: 'Koli Bandı', desc: 'Silahları birbirine bantla: Roketli Ördek ya da Misketli Ördek' },
@@ -602,7 +602,7 @@ const WI = id => WEAPONS.findIndex(w => w.id === id);
 const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 0, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0, dynamite: 2, barricade: 2, swap: 1, drill: 0, guided: 0, sticky: 0, remote: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
 const LASSO_V = 900, LASSO_MAX = 650, LASSO_PULL = 420, LASSO_DMG = 15;   // kement: yerçekimsiz, dümdüz gider; sandığı çeker, rakibi kırbaçlar
 const JET_V = 420, JET_Y = 70, JET_LEAD = 2.6;       // F-16 hedefin üstüne ~2,6 sn'de gelir (ses 5 sn)
-const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 75, ABOMB_R = 44;
+const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 25, ABOMB_R = 44;
 const SETTLE_SHOT = 2;                               // atıştan sonra kamera vuruş yerinde bu kadar bekler (sn)
 const CRATE_WEAPONS = [WI('cluster'), WI('goat'), WI('portal')];
 const PUNCH_DMG = 10, PUNCH_REACH = 34;
@@ -1652,7 +1652,7 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 const YAMA = [
   ['25', '21 Kasım 2026', [
     ['y', 'Nomad modu: oyun kurulurken Başlangıç > Nomad seçilirse askerler haritada olmadan başlanır; oyuncular sırayla (atış sırası gibi) askerlerini istedikleri yere koyar, her yerleştirme 15 saniye'],
-    ['d', 'Hele İki Gözüm: her bomba 75 hasar (99 idi)'],
+    ['d', 'Hele İki Gözüm: her bomba 25 hasar (99 idi)'],
     ['y', 'Nomad: herkes yerleşince raundun başladığını bildiren ding ding zil sesi'],
   ]],
   ['24', '21 Kasım 2026', [
