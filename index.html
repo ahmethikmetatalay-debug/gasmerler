@@ -582,7 +582,7 @@ const WEAPONS = [
   { id: 'cluster', name: 'Misket Bombası', desc: 'Çarpınca 5 parçaya bölünür' },
   { id: 'goat', name: 'Deli Ördek', desc: 'Kurmalı banyo ördeği: paytak paytak yürür, zıplar. Tekrar ATEŞ ile patlat' },
   { id: 'portal', name: 'Portal Tabancası', desc: 'İki atışla iki portal aç. Güçlü atış daha uzağa gider' },
-  { id: 'shovel', name: 'Kürek', desc: 'Sandıktan çıkar. Oklarla nişan yönüne tünel kaz' },
+  { id: 'shovel', name: 'Kürek', desc: 'Herkes 2 tane ile başlar, sandıktan da çıkar. Oklarla nişan yönüne tünel kaz' },
   { id: 'lasso', name: 'Kement', desc: 'Sandıktan çıkar, tek kullanımlık. Dümdüz giden iple uzaktaki sandığı çeker' },
   { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (bomba başı 25 hasar)' },
   { id: 'jet', name: 'Sprey Jet', desc: 'Zıpla tuşunu basılı tut, uç. Sağ/sol ile yön ver. 3 sn yakıt, turu bitirmez' },
@@ -593,13 +593,13 @@ const WEAPONS = [
   { id: 'dynamite', name: 'Dinamit', desc: 'Önüne bırakılır, fitili 5 saniyede yanar, büyük patlama. Bıraktıktan sonra kaç' },
   { id: 'barricade', name: 'Barikat', desc: 'İnşaat demiri: haritada bir yere dokun, sağ/sol ile döndür, ATEŞ ile kur. Havada durur. Turu bitirmez' },
   { id: 'drill', name: 'Delici Roket', desc: 'Bazuka gibi atılır; toprağa girince patlamaz, ~3 asker boyu tünel açar, sonra patlar' },
-  { id: 'guided', name: 'Güdümlü Roket', desc: 'Yavaş uçar, 6 sn boyunca Sprey Jet gibi yönlendirilir: sağ/sol o yöne iter, zıpla yukarı kaldırır, bırakınca yavaşça alçalır' },
+  { id: 'guided', name: 'Güdümlü Roket', desc: 'Bazuka gibi fırlatılır; havada 0,7 sn sonra güdüm devreye girer, yavaşlar ve 6 sn Sprey Jet gibi yönlendirilir: sağ/sol o yöne iter, zıpla yukarı kaldırır' },
   { id: 'sticky', name: 'Yapışkan Bomba', desc: 'İlk değdiği askere ya da yere yapışır. İstediğin turda Patlat ile patlatırsın' },
   { id: 'remote', name: 'Patlat', desc: 'Yapışkan bombanı patlat (tur biter)' },
   { id: 'swap', name: 'Asker Değiştir', desc: 'Haritada askerine dokun ya da ATEŞ ile sıradaki askerine geç. Turu bitirmez' },
 ];
 const WI = id => WEAPONS.findIndex(w => w.id === id);
-const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 0, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0, dynamite: 2, barricade: 2, swap: 1, drill: 0, guided: 2, sticky: 0, remote: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
+const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 2, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0, dynamite: 2, barricade: 2, swap: 1, drill: 0, guided: 2, sticky: 0, remote: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
 const LASSO_V = 900, LASSO_MAX = 650, LASSO_PULL = 420, LASSO_DMG = 15;   // kement: yerçekimsiz, dümdüz gider; sandığı çeker, rakibi kırbaçlar
 const JET_V = 420, JET_Y = 70, JET_LEAD = 2.6;       // F-16 hedefin üstüne ~2,6 sn'de gelir (ses 5 sn)
 const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 25, ABOMB_R = 44;
@@ -627,7 +627,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v25-1-';
+const ID_PREFIX = 'gasmerler-v25-2-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1650,6 +1650,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['25.2', '21 Kasım 2026', [
+    ['d', 'Güdümlü Roket yine güç toplanarak bazuka gibi fırlatılır; havada 0,7 sn sonra güdüm devreye girer, roket yavaşlar ve yönlendirilir'],
+    ['d', 'Herkes oyuna 2 küreklik hakla başlar'],
+  ]],
   ['25.1', '21 Kasım 2026', [
     ['d', 'Güdümlü Roket Sprey Jet gibi sürülür: yavaş uçar, sağ/sol o yöne iter, zıpla yukarı kaldırır, bırakınca yavaşça alçalır; 6 sn yakıt, güç toplamadan hemen ateşlenir'],
     ['d', 'Her oyuncu oyuna 2 Güdümlü Roketle başlar'],
@@ -2062,7 +2066,7 @@ function askerDegistir(i) {
 // ---- Koli bandı tarifleri: Delici Roket, Güdümlü Roket, Yapışkan Bomba ----
 const DELME_V = 250, DELME_MESAFE = 105, DELME_R = 8;
 // Güdümlü roket Sprey Jet gibi sürülür: yavaş, sağ/sol yatay iter, zıpla (ya da yukarı ok) yükseltir, girdi yoksa hafifçe alçalır
-const GUDUM_YAKIT = 6, GUDUM_V = 150, GUDUM_IVME = 380, GUDUM_DUSUS = 70, GUDUM_FREN = 1.6;
+const GUDUM_GECIKME = 0.7, GUDUM_YAVAS = 900, GUDUM_YAKIT = 6, GUDUM_V = 150, GUDUM_IVME = 380, GUDUM_DUSUS = 70, GUDUM_FREN = 1.6;
 const YAPIS_DMG = 45, YAPIS_R = 30, PATLAT_SURE = 0.4;
 let yapiskanlar = [];   // { sahip: takım sırası, hedef: asker sırası | null, x, y }
 const bombaVar = t => yapiskanlar.some(b => b.sahip === teams.indexOf(t));
@@ -2115,12 +2119,15 @@ function gudumGirdi(p) {   // güdümlü roketi yönlendiren tuşlar: normal tur
   return input;
 }
 function stepGuided(p) {
-  if (p.yakit > 0) {
+  if (p.gecikme > 0) {   // önce bazuka gibi fırlar; bir süre sonra güdüm devreye girer
+    p.dir = 0; p.vx += wind * WIND_ACC * DT; p.vy += G * DT; p.gecikme -= DT;
+    if (p.gecikme <= 0) { p.gecikme = 0; uyari('Güdüm devrede: sağ/sol ve zıpla ile yönlendir'); }
+  } else if (p.yakit > 0) {
     const g = gudumGirdi(p), d = g ? (g.right ? 1 : 0) - (g.left ? 1 : 0) : 0, yuk = g ? (g.gyukari || g.up ? 1 : 0) - (g.down ? 1 : 0) : 0;
     p.dir = d || -yuk * 0.5; p.yakit = Math.max(0, p.yakit - DT);
     p.vx += d * GUDUM_IVME * DT; p.vy += (yuk ? -yuk * GUDUM_IVME : GUDUM_DUSUS) * DT;
     if (!d) p.vx -= p.vx * Math.min(1, GUDUM_FREN * DT * 0.5);   // yön bırakılınca yatay hız yavaşça söner
-    const v = Math.hypot(p.vx, p.vy); if (v > GUDUM_V) { p.vx *= GUDUM_V / v; p.vy *= GUDUM_V / v; }
+    const v = Math.hypot(p.vx, p.vy); if (v > GUDUM_V) { const k = Math.max(GUDUM_V, v - GUDUM_YAVAS * DT) / v; p.vx *= k; p.vy *= k; }   // fırlatma hızından sürüş hızına yumuşakça yavaşlar
     if (v > 1) p.ang = Math.atan2(p.vy, p.vx);
   } else { p.dir = 0; p.vx += wind * WIND_ACC * DT; p.vy += G * DT; }
   const n = Math.max(1, Math.ceil(Math.hypot(p.vx, p.vy) * DT / 1.5));
@@ -2569,7 +2576,7 @@ function mermiAt(u, w, power, slot = 0) {
   else if (w === 'cluster') addProj({ type: 'cluster', x: sx, y: sy, vx: dx * sp, vy: dy * sp, impact: true, r: 30, dmg: 13.5, age: 0, atan: ui });
   else if (w === 'goat' || w === 'mduck') addProj({ type: w, x: u.x + u.facing * 14, y: u.y, h: 14, vx: 0, vy: 0, grounded: false, dir: u.facing, fuse: 6, hop: 0.8, walk: 0, r: 60, dmg: 60, age: 0, atan: ui });
   else if (w === 'drill') addProj({ type: 'drill', x: sx, y: sy, vx: dx * sp, vy: dy * sp, r: 42, dmg: 48, age: 0, grounded: false, atan: ui });
-  else if (w === 'guided') { addProj({ type: 'guided', x: sx, y: sy, vx: dx * GUDUM_V, vy: dy * GUDUM_V, ang: Math.atan2(dy, dx), yakit: GUDUM_YAKIT, dir: 0, r: 42, dmg: 48, age: 0, atan: ui }); input.gyukari = false; uyari('Sağ/sol ve zıpla ile yönlendir'); }
+  else if (w === 'guided') { addProj({ type: 'guided', x: sx, y: sy, vx: dx * sp, vy: dy * sp, ang: Math.atan2(dy, dx), gecikme: GUDUM_GECIKME, yakit: GUDUM_YAKIT, dir: 0, r: 42, dmg: 48, age: 0, atan: ui }); input.gyukari = false; }
   else if (w === 'sticky') addProj({ type: 'sticky', x: sx, y: sy, vx: dx * sp, vy: dy * sp, age: 0, atan: ui });
   else if (w === 'dynamite') addProj({ type: 'dynamite', x: u.x + u.facing * 16, y: u.y - 4, vx: u.facing * 30, vy: -60, fuse: 5, bounce: 0.25, r: 64, dmg: 70, age: 0, atan: ui });
   else if (w === 'rduck') addProj({ type: 'rduck', x: sx, y: sy, vx: dx * sp, vy: dy * sp, wind: true, age: 0, dir: u.facing, atan: ui });
@@ -3347,7 +3354,7 @@ function snapshot() {
     wp: teams.map(t => t.weapon), am: teams.map(t => t.ammo),
     u: units.map(u => [r1(u.x), r1(u.y), u.hp, u.alive ? 1 : 0, u.facing, r2(u.aim), u.traitor ? 1 : 0, u.link ? 1 : 0]),
     dl: digLeft, dg: digging ? 1 : 0, jt: [jetKul ? 1 : 0, r2(jetYakit), jetItki ? 1 : 0, kacis ? 1 : 0], at: airTarget ? [r1(airTarget.x), r1(airTarget.y)] : 0, sw: shotThisTurn ? 1 : 0,
-    p: projs.map(p => [p.id, p.type, r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.fuse !== undefined ? r2(p.fuse) : -1, p.type === 'pshot' ? p.slot : (p.dir || 0), p.grounded ? 1 : 0, p.atan ?? -1, p.yakit !== undefined ? r2(p.yakit) : -1]),
+    p: projs.map(p => [p.id, p.type, r1(p.x), r1(p.y), r1(p.vx), r1(p.vy), p.fuse !== undefined ? r2(p.fuse) : -1, p.type === 'pshot' ? p.slot : (p.dir || 0), p.grounded ? 1 : 0, p.atan ?? -1, p.yakit !== undefined ? (p.gecikme > 0 ? -2 : r2(p.yakit)) : -1]),
     g: graves.map(g => [r1(g.x), r1(g.y), g.ti, g.hp, g.ui]),
     ad: asitDurum === 'uyari' ? 1 : asitDurum === 'yagis' ? 2 : 0, ko: kaosSnap(),
     yb: yapiskanlar.map(b => [b.sahip, b.hedef ?? -1, r1(b.x), r1(b.y)]),
@@ -3488,7 +3495,7 @@ function applySnap(s) {
   const old = new Map(projs.map(p => [p.id, p]));
   projs = (s.p || []).map(a => {
     const p = old.get(a[0]) || {};
-    Object.assign(p, { id: a[0], type: a[1], bx: a[2], by: a[3], vx: a[4], vy: a[5], fuse: a[6] < 0 ? undefined : a[6], dir: a[7], slot: a[7], grounded: !!a[8], atan: a[9] ?? -1, yakit: a[10] >= 0 ? +a[10] : undefined });
+    Object.assign(p, { id: a[0], type: a[1], bx: a[2], by: a[3], vx: a[4], vy: a[5], fuse: a[6] < 0 ? undefined : a[6], dir: a[7], slot: a[7], grounded: !!a[8], atan: a[9] ?? -1, yakit: a[10] >= 0 ? +a[10] : undefined, gecikme: a[10] === -2 ? 1 : 0 });
     if (p.x === undefined) { p.x = a[2]; p.y = a[3]; }
     return p;
   });
@@ -4826,7 +4833,7 @@ function drawProjectile(p, t) {
     ctx.rotate(Math.atan2(p.vy, p.vx)); TARIF_CIZ.deliciRoket(ctx, t, !!p.grounded);
   } else if (p.type === 'guided') {
     ctx.save(); ctx.rotate(Math.atan2(p.vy, p.vx)); TARIF_CIZ.gudumluRoket(ctx, t, p.yakit > 0 ? p.dir || 0 : 0.5, undefined); ctx.restore();
-    if (p.yakit !== undefined && p.yakit > 0) {   // yakıt çubuğu dönmeden üstte
+    if (p.yakit !== undefined && p.yakit > 0 && !(p.gecikme > 0)) {   // yakıt çubuğu dönmeden üstte
       const k = p.yakit / GUDUM_YAKIT; ctx.fillStyle = 'rgba(6,3,3,.6)'; ctx.fillRect(-7, -15, 14, 2.4);
       ctx.fillStyle = k > 0.25 ? '#8fe36b' : '#ff4d5e'; ctx.fillRect(-6.6, -14.6, 13.2 * k, 1.6);
     }
@@ -5176,7 +5183,7 @@ function updateHud() {
   const hb = $('hudBottom');
   // Kaos atışlarından sonra kendi yürüyen ördeği olan oyuncunun ATEŞ düğmesi açık kalır (patlatabilsin)
   const ordekBende = kaosTur && kk && state === 'fly' && projs.some(p => YURUYEN.has(p.type) && p.atan === kk.ui);
-  // Uçan güdümlü roketi süren oyuncu: yön ve zıpla düğmeleri açık, Sprey Jet düzeni (zıpla solda, yön sağda)
+  // Uçan güdümlü roketi süren oyuncu (fırladığı andan: düzen güdüm devreye girerken kaymasın; basılı tuş güdüm başlayınca işler): yön ve zıpla düğmeleri açık, Sprey Jet düzeni (zıpla solda, yön sağda)
   const gudum = state === 'fly' && projs.some(p => p.type === 'guided' && (p.yakit ?? 1) > 0 && (!kaosTur || (kk && p.atan === kk.ui))) && (kaosTur ? !!kk : mine);
   sinif(hb, 'wait', !(mine || ordekBende || gudum));
   // Kürek seçiliyken çubuk kalan kazma hakkını gösterir, oklar kazar
@@ -5278,7 +5285,7 @@ function firePress() {
   if (ANINDA.has(wid)) { fire(0); return; }   // güç doldurmadan hemen ateşlenir
   input.charging = true; input.power = 0;
 }
-const ANINDA = new Set(['guided', 'goat', 'airstrike', 'lasso', 'revive', 'beartrap', 'whistle', 'mduck', 'dynamite', 'barricade', 'remote']);
+const ANINDA = new Set(['goat', 'airstrike', 'lasso', 'revive', 'beartrap', 'whistle', 'mduck', 'dynamite', 'barricade', 'remote']);
 // Sırası olan oyuncuya kısa uyarı (online'da yalnız ona gider)
 function uyari(text) {
   const t = team();
@@ -5351,7 +5358,7 @@ function jetBitir() {
   if (WEAPONS[t.weapon].id === 'jet') t.weapon = t.prevW !== undefined && t.ammo[t.prevW] !== 0 && !['jet', 'shovel'].includes(WEAPONS[t.prevW].id) ? t.prevW : 0;
 }
 function jump() {
-  if (state === 'fly' && projs.some(p => p.type === 'guided' && p.yakit > 0)) { input.gyukari = true; return; }
+  if (state === 'fly' && projs.some(p => p.type === 'guided' && p.yakit > 0)) { input.gyukari = true; return; }   // güdüm daha devrede değilse de tutulur, devreye girince işler
   if (team() && WEAPONS[team().weapon].id === 'jet') { jetBas(); return; }
   if (state !== 'aim' || !active || !active.grounded || input.charging || moveLeft < JUMP_COST) return;
   moveLeft -= JUMP_COST;
