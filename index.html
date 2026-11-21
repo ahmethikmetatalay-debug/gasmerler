@@ -599,7 +599,7 @@ const WEAPONS = [
   { id: 'swap', name: 'Asker Değiştir', desc: 'Haritada askerine dokun ya da ATEŞ ile sıradaki askerine geç. Turu bitirmez' },
 ];
 const WI = id => WEAPONS.findIndex(w => w.id === id);
-const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 2, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0, dynamite: 2, barricade: 2, swap: 1, drill: 0, guided: 2, sticky: 0, remote: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
+const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 2, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0, dynamite: 2, barricade: 2, swap: 1, drill: 0, guided: 0, sticky: 0, remote: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
 const LASSO_V = 900, LASSO_MAX = 650, LASSO_PULL = 420, LASSO_DMG = 15;   // kement: yerçekimsiz, dümdüz gider; sandığı çeker, rakibi kırbaçlar
 const JET_V = 420, JET_Y = 70, JET_LEAD = 2.6;       // F-16 hedefin üstüne ~2,6 sn'de gelir (ses 5 sn)
 const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 25, ABOMB_R = 44;
@@ -627,7 +627,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v25-2-';
+const ID_PREFIX = 'gasmerler-v25-3-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1525,7 +1525,12 @@ function nextTurn() {
   if (aliveSides.length <= 1) { gameOver(aliveSides.length ? aliveSides[0] : -1); return; }
   if (turSay > 1) sakinTur = hasarVar ? 0 : sakinTur + 1;
   hasarVar = false;
-  if (asitDurum === 'uyari') { asitYagdir(); return; }   // uyarı turu bitti: yağış, sonra sıra devam eder
+  // Uyarı turu bitti: o turda biri hasar aldıysa (atanın kendisi dahil) yağmur dağılır, almadıysa yağar
+  if (asitDurum === 'uyari') {
+    if (sakinTur > 0) { asitYagdir(); return; }
+    asitDurum = null;
+    showBanner('ASİT YAĞMURU DAĞILDI', '#b6e83a'); emit({ t: 'bn', text: 'ASİT YAĞMURU DAĞILDI', c: '#b6e83a' });
+  }
   kaosTur = false; kaos = null; $('perde').hidden = true;
   // Kaos Turu maçın rastgele bir anında gelir; sırası gelecek oyuncu kaostan sonra oynar
   if (kaosIlan || (!kaosOldu && turSay > 4 && rng() < (window.__kaosYok ? 0 : KAOS_SANS))) { kaosOldu = true; kaosBaslat(); return; }
@@ -1650,6 +1655,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['25.3', '21 Kasım 2026', [
+    ['d', 'Asit yağmuru: iki oyuncu üst üste kimseye hasar veremezse uyarı gelir; üçüncü oyuncu birine (kendine de olur, kalkana da) hasar verirse yağmur dağılır. Üç oyuncu üst üste veremezse yağar'],
+    ['d', 'Güdümlü Roket başlangıçta yok: yalnız koli bandıyla (Bant + Bazuka + Sprey Jet) yapılır'],
+  ]],
   ['25.2', '21 Kasım 2026', [
     ['d', 'Güdümlü Roket yine güç toplanarak bazuka gibi fırlatılır; havada 0,7 sn sonra güdüm devreye girer, roket yavaşlar ve yönlendirilir'],
     ['d', 'Herkes oyuna 2 küreklik hakla başlar'],
@@ -1924,7 +1933,7 @@ function credit(u, dmg) {
 function hurt(u, dmg, linked) {
   if (dmg <= 0 || !u.alive) return false;
   // Kalkan ilk hasarı tamamen yutar, 2 sn mavi küre olarak görünüp kaybolur
-  if (u.shield) { u.shield = false; u.vx = 0; u.vy = 0; shieldFx(u); addPop(u.x, u.y - 52, 'Kalkan!', '#8fd3ff'); return true; }
+  if (u.shield) { u.shield = false; u.vx = 0; u.vy = 0; hasarVar = true; shieldFx(u); addPop(u.x, u.y - 52, 'Kalkan!', '#8fd3ff'); return true; }
   credit(u, Math.min(dmg, u.hp));
   vuranYaz(u); hasarVar = true;
   u.hp = Math.max(0, u.hp - dmg);
@@ -5936,7 +5945,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 
 // Otomatik testler için iç duruma erişim; sadece adres ?test ile açılınca
 if (new URLSearchParams(location.search).has('test')) window.__t = {
-  get state() { return state; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
+  get state() { return state; }, get turSay() { return turSay; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
