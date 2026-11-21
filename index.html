@@ -905,6 +905,7 @@ const Sound = (() => {
         break;
       }
       case 'kapan': osc('square', 900, 180, t, 0.09, 0.22); nz(t, 0.12, 0.5, 'highpass', 2500, 0); osc('triangle', 2400, 1200, t + 0.02, 0.18, 0.12); break;   // demir çeneler çat diye kapanır
+      case 'dingDing': [0, 0.34].forEach(d => { osc('sine', 1480, 0, t + d, 1.2, 0.24); osc('sine', 4085, 0, t + d, 0.35, 0.07); osc('sine', 742, 0, t + d, 0.9, 0.1); osc('triangle', 2960, 0, t + d, 0.06, 0.08); }); break;   // ring zili: raunt başladı
       case 'bip': [0, 0.13, 0.24, 0.32].forEach((d, i) => osc('square', 1650 + i * 120, 0, t + d, 0.05, 0.08)); break;   // kumanda: hızlanan bip
       case 'yapis': nz(t, 0.18, 0.35, 'lowpass', 900, 200); osc('sine', 260, 90, t, 0.16, 0.25); break;   // yapışkan şlop
       case 'demir': {   // barikat kurulur: inşaat demiri yere/havaya oturur, kısa çınlama
@@ -1380,6 +1381,7 @@ function nomadBitti() {
   turnTeam = (teams.indexOf(yerSira[0].team) + teams.length - 1) % teams.length;   // ilk yerleştiren ilk atar
   for (const t of teams) t.cur = -1;
   airTarget = null;
+  sesYay('dingDing');   // herkes yerleşti: ding ding, raunt başlıyor
   nextTurn();
 }
 // Dokunulan yerin altındaki zemin (havaya dokunulduysa aşağı düşer, toprağa dokunulduysa yüzeye çıkar). Uygun değilse null.
@@ -1651,6 +1653,7 @@ const YAMA = [
   ['25', '21 Kasım 2026', [
     ['y', 'Nomad modu: oyun kurulurken Başlangıç > Nomad seçilirse askerler haritada olmadan başlanır; oyuncular sırayla (atış sırası gibi) askerlerini istedikleri yere koyar, her yerleştirme 15 saniye'],
     ['d', 'Hele İki Gözüm: her bomba 75 hasar (99 idi)'],
+    ['y', 'Nomad: herkes yerleşince raundun başladığını bildiren ding ding zil sesi'],
   ]],
   ['24', '21 Kasım 2026', [
     ['y', 'Koli bandı tarifi Delici Roket (Bant + Bazuka + Kürek): toprağa girince patlamaz, ~3 asker boyu tünel açar, sonra patlar'],
@@ -3195,7 +3198,7 @@ function kabloZamani() {
 }
 function toastAll(text) { toast(text); emit({ t: 'toast', text }); }
 // Kodla üretilen bir sesi herkeste çalar
-const YAYIN_SES = new Set(['bip', 'yapis', 'dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir', 'traitor', 'demir', 'demirVur']);
+const YAYIN_SES = new Set(['dingDing', 'bip', 'yapis', 'dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir', 'traitor', 'demir', 'demirVur']);
 function sesYay(n) { Sound.play(n); emit({ t: 'ps', n }); }
 function teamGone(t) {
   if (mode !== 'host' || !t || t.slot === undefined || t.slot === 0) return false;
