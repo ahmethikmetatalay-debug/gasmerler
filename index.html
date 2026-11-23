@@ -1345,7 +1345,7 @@ function startGame(opts) {
   genTerrain();
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
-  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; kokular = []; kapanlar = []; barikatlar = []; yapiskanlar = [];
+  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; yayicilar = []; zerreler = []; kokular = []; kapanlar = []; barikatlar = []; yapiskanlar = [];
   turSay = 0; olaySil(); imkansizTur = -1; atanU = null; kaosIlan = false; kaosTur = false; kaos = null; dudukler = []; kaosOldu = false; $('perde').hidden = true; sakinTur = 0; hasarVar = false; asitDurum = null; cizirtilar = [];
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
@@ -1691,6 +1691,12 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['27.1', '23 Kasım 2026', [
+    ['y', 'Patlamalar yeniden yapıldı: ani parlama, şok halkası, ateş topları, kıvılcımlar, uçuşan toprak ve yükselip açılan duman'],
+    ['y', 'Krater birkaç saniye tüter ve kor saçar; büyük patlamalardan sonra kenarda küçük alevler yanar (yalnız görsel)'],
+    ['y', 'Havada rüzgârla sürüklenen minik zerreler: rüzgâr yokken dik düşer, rüzgâr güçlendikçe yatar ve hızlanır'],
+    ['y', 'Bazuka roketinin arkasında egzoz alevi'],
+  ]],
   ['27', '23 Kasım 2026', [
     ['y', 'El bombası fitili seçilebilir: el bombası seçiliyken silah düğmesinin yanındaki Fitil düğmesine dokundukça 1-5 saniye (bilgisayarda F tuşu)'],
     ['d', 'Patlama kraterlerinin kenarı yanık ve kavrulmuş toprakla çevrili, kenarda kırıntılar var'],
@@ -3057,10 +3063,128 @@ function explodeFx(x, y, r, ses) {
   carve(x, y, r, true);
   shake = Math.min(12, shake + r * 0.18);
   Sound.sample(ses || (r <= 32 ? 'kucuk' : 'buyuk')) || Sound.play('boom', r); buzz(r > 35 ? 70 : 40);
-  parts.push({ kind: 'flash', x, y, size: r * 1.4, life: 0.16, max: 0.16, vx: 0, vy: 0, g: 0 });
-  for (let i = 0; i < 14; i++) { const a = Math.random() * 6.28, s = 40 + Math.random() * 140; parts.push({ kind: 'fire', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, g: -60, size: r * (0.22 + Math.random() * 0.25), life: 0.3 + Math.random() * 0.3, max: 0.6 }); }
-  for (let i = 0; i < 10; i++) { const a = Math.random() * 6.28, s = 20 + Math.random() * 60; parts.push({ kind: 'smoke', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 20, g: -30, size: r * (0.3 + Math.random() * 0.3), life: 0.9 + Math.random() * 0.8, max: 1.7 }); }
-  for (let i = 0; i < 18; i++) { const a = -Math.PI * Math.random(), s = 150 + Math.random() * 280; parts.push({ kind: 'dirt', x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, g: G, size: 2 + Math.random() * 3, life: 1.2, max: 1.2 }); }
+  vfxPatlama(x, y, r);
+}
+
+// ---- Görsel efektler (VFX): W.M.D'nin PFX_MediumExplosion tarifinden uyarlandı. Yalnız görsel, her telefon kendi
+// ekranında rastgele üretir (ağdan gitmez). Katmanlar: parlama + şok halkası (kısa, toplamsal) → ateş topları →
+// ağır kıvılcım çizgileri ve toprak parçaları → yükselip büyüyen, koyudan açığa dönen duman → kalıcı krater dumanı,
+// korlar ve kenarda yanan küçük alevler. Parçacık sayısı patlama boyuna göre ölçeklenir ve parts 700 ile sınırlı.
+let yayicilar = [];   // { tur: 'krater'|'alev', x, y, t, max, acc }
+const rnd = (a, b) => a + Math.random() * (b - a);
+// 3 duraklı renk rampası: f = ömür oranı (0 doğum, 1 ölüm)
+function rampa(c, f) {
+  const [a, b, d] = c, k = f < 0.5 ? f * 2 : (f - 0.5) * 2, p = f < 0.5 ? a : b, q = f < 0.5 ? b : d;
+  return [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k, p[2] + (q[2] - p[2]) * k];
+}
+const RENK = {
+  parlama: [[255, 255, 240], [255, 220, 120], [255, 110, 40]],
+  ates: [[255, 250, 210], [255, 170, 50], [200, 50, 20]],
+  kivilcim: [[255, 255, 230], [255, 210, 90], [230, 70, 30]],
+  duman: [[44, 38, 48], [92, 86, 96], [150, 146, 152]],
+  alev: [[255, 240, 170], [255, 140, 40], [190, 40, 20]],
+};
+// Yumuşak daire: ortası dolu, kenarı saydam (radyal geçiş) 64 px'lik hazır tuval; renk 16'lık adımlarla önbellekte.
+// Parçacık başına createRadialGradient yerine drawImage: telefonda hızlı.
+const yumusakOnbellek = new Map();
+function yumusakDaire(c, sert = 0.35) {
+  const r = c[0] & 0xf0, g = c[1] & 0xf0, b = c[2] & 0xf0, k = (r << 16) | (g << 8) | b | (sert > 0.5 ? 1 << 24 : 0);
+  let cv2 = yumusakOnbellek.get(k);
+  if (!cv2) {
+    cv2 = document.createElement('canvas'); cv2.width = cv2.height = 64;
+    const x = cv2.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, `rgba(${r},${g},${b},1)`); gr.addColorStop(sert, `rgba(${r},${g},${b},.75)`); gr.addColorStop(1, `rgba(${r},${g},${b},0)`);
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 64); yumusakOnbellek.set(k, cv2);
+  }
+  return cv2;
+}
+function vfxPatlama(x, y, r) {
+  const s = clamp(r / 42, 0.35, 1.8);   // bazuka = 1
+  parts.push({ kind: 'parlama', x, y, size: r * 2.2, life: 0.3, max: 0.3, vx: 0, vy: 0, g: 0 });
+  parts.push({ kind: 'halka', x, y, size: r * 2.1, life: 0.38, max: 0.38, vx: 0, vy: 0, g: 0 });
+  for (let i = 0, n = Math.round(8 * s + 3); i < n; i++) {   // ateş topları
+    const a = Math.random() * 6.28, v = rnd(40, 170) * s;
+    parts.push({ kind: 'ates', x: x + Math.cos(a) * r * 0.2, y: y + Math.sin(a) * r * 0.2, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 30, g: -90, surt: 2.2, size: r * rnd(0.22, 0.42), life: rnd(0.3, 0.6), max: 0.6 });
+  }
+  for (let i = 0, n = Math.round(10 * s + 4); i < n; i++) {   // kıvılcım çizgileri: hızlı, ağır, hızına göre uzar
+    const a = -Math.PI * rnd(0.05, 0.95), v = rnd(320, 780) * Math.sqrt(s);
+    parts.push({ kind: 'kivilcim', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 820, surt: 0.9, size: rnd(1.1, 2), life: rnd(0.45, 0.9), max: 0.9 });
+  }
+  for (let i = 0, n = Math.round(14 * s + 4); i < n; i++) {   // toprak parçaları (dönen küçük kırıntılar)
+    const a = -Math.PI * Math.random(), v = rnd(150, 430) * Math.sqrt(s);
+    parts.push({ kind: 'dirt', x, y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: G, size: rnd(2, 4.5), life: rnd(0.9, 1.3), max: 1.3 });
+  }
+  for (let i = 0, n = Math.round(6 * s + 2); i < n; i++) {   // duman: yükselir, büyür, koyudan açığa döner
+    const a = Math.random() * 6.28, v = rnd(20, 90) * s;
+    parts.push({ kind: 'duman', x: x + Math.cos(a) * r * 0.3, y: y + Math.sin(a) * r * 0.3, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 25, g: -38, surt: 1.4, size: r * rnd(0.24, 0.36), buyu: rnd(1.8, 2.5), life: rnd(1.6, 2.6), max: 2.6 });
+  }
+  // Kalıcı krater dumanı ve korlar; büyük patlamada kenarda yanan küçük alevler
+  if (yayicilar.length < 14) yayicilar.push({ tur: 'krater', x, y: y + r * 0.35, t: 0, max: 3.5 + s * 1.5, acc: 0, r });
+  const alevSay = r >= 40 ? 3 : r >= 28 ? 2 : r >= 20 && Math.random() < 0.4 ? 1 : 0;
+  for (let k = 0, dene = 0; k < alevSay && dene < 16 && yayicilar.length < 14; dene++) {
+    const a = rnd(0.15, Math.PI - 0.15) + (Math.random() < 0.3 ? Math.PI : 0);   // çoğu alt yarı (zemin), biraz yanlar
+    for (let d = r; d < r + 16; d += 2) {
+      const px = x + Math.cos(a) * d, py = y + Math.sin(a) * d;
+      if (isSolid(px, py)) {   // ilk toprak: üstü boşsa (yüzeyse) alev oraya
+        if (!isSolid(px, py - 4)) { yayicilar.push({ tur: 'alev', x: px, y: py - 1, t: 0, max: rnd(2.2, 4.2), acc: 0, b: rnd(0.8, 1.25) }); k++; }
+        break;
+      }
+    }
+  }
+}
+// Yayıcıları ilerletir: krater dumanı (2,5/sn) + kor (1,5/sn); alev (16/sn dil + ara sıra duman). Altı boşalan alev söner.
+function vfxAdim(dt) {
+  for (const e of yayicilar) {
+    e.t += dt; e.acc += dt;
+    const sonma = Math.max(0, 1 - e.t / e.max);
+    if (e.tur === 'krater') {
+      while (e.acc > 0.4) {
+        e.acc -= 0.4;
+        parts.push({ kind: 'duman', x: e.x + rnd(-e.r, e.r) * 0.4, y: e.y, vx: rnd(-8, 8) + wind * 25, vy: rnd(-40, -16), g: -6, surt: 0.3, size: rnd(5, 9), buyu: 3, life: rnd(2.2, 3.4), max: 3.4, soluk: 0.65 * sonma });
+        if (Math.random() < 0.6) parts.push({ kind: 'kor', x: e.x + rnd(-e.r, e.r) * 0.4, y: e.y, vx: rnd(-20, 20) + wind * 30, vy: rnd(-70, -30), g: -10, surt: 0.6, size: rnd(1, 1.8), life: rnd(0.8, 1.4), max: 1.4 });
+      }
+    } else {   // alev
+      if (e.t > 0.2 && Math.random() < dt * 2 && !isSolid(e.x, e.y + 3) && !isSolid(e.x, e.y + 6)) e.t = e.max;   // altı gitti
+      while (e.acc > 0.06) {
+        e.acc -= 0.06;
+        if (Math.random() > sonma + 0.15) continue;
+        parts.push({ kind: 'alev', x: e.x + rnd(-3, 3) * e.b, y: e.y, vx: rnd(-10, 10) + wind * 20, vy: rnd(-70, -40) * e.b, g: -40, surt: 1.2, size: rnd(3, 5.5) * e.b * (0.5 + sonma * 0.5), life: rnd(0.35, 0.6), max: 0.6, faz: Math.random() * 6 });
+        if (Math.random() < 0.12) parts.push({ kind: 'duman', x: e.x, y: e.y - 8, vx: wind * 25, vy: rnd(-35, -20), g: -8, surt: 0.4, size: rnd(3, 5), buyu: 2.5, life: rnd(1.2, 2), max: 2, soluk: 0.4 });
+      }
+    }
+  }
+  yayicilar = yayicilar.filter(e => e.t < e.max);
+}
+
+// Rüzgâr zerreleri: havada uçuşan minik parçacıklar (W.M.D'deki "WindSpecks"). Rüzgâr 0'da dik düşer, rüzgâr arttıkça
+// yatar ve hızlanır (W.M.D: %20'lik rüzgârda 45°). Kameranın gördüğü alanda yaşar; çıkan zerre karşı kenardan girer.
+// Arazinin arkasında çizilir. Yalnız görsel.
+let zerreler = [], zerreAlan = null;   // zerreAlan: son çizilen karede kameranın gördüğü dünya dikdörtgeni
+const ZERRE_N = 45;
+function zerreAdim(dt) {
+  if (!terr || state === 'menu') return;
+  if (!zerreAlan) return;   // ekran boyutu burada ölçülmez (zorunlu yerleşim hesabı); render'ın hesapladığı alan kullanılır
+  const { x0, y0, x1, y1 } = zerreAlan;
+  const w = wind || 0, aci = Math.atan(Math.abs(w) * 5), hiz = 40 + Math.abs(w) * 230, yon = Math.sign(w);
+  const vx = yon * Math.sin(aci) * hiz, vy = Math.cos(aci) * hiz;
+  if (!zerreler.length) for (let i = 0; i < ZERRE_N; i++) zerreler.push({ x: rnd(x0, x1), y: rnd(y0, y1), s: rnd(0.7, 1.4), f: Math.random() * 6.28, d: Math.random() * 6.28, c: i % 5 });
+  for (const z of zerreler) {
+    z.f += dt * (1.5 + z.s); z.d += dt * 3 * z.s;
+    z.x += (vx * z.s + Math.sin(z.f) * 10) * dt; z.y += (vy * z.s + Math.cos(z.f * 0.7) * 6) * dt;
+    // Görünen alandan çıktıysa: rüzgârın geldiği kenardan ya da üstten yeniden gir
+    if (z.x < x0 || z.x > x1 || z.y < y0 || z.y > y1) {
+      if (Math.abs(vx) > vy && Math.random() < 0.75) { z.x = vx > 0 ? x0 : x1; z.y = rnd(y0, y1); }
+      else { z.x = rnd(x0, x1); z.y = y0; }
+    }
+  }
+}
+function zerreCiz() {
+  const renk = TEMA.zerre || TEMA.toz || ['#ffffff'];
+  for (const z of zerreler) {
+    ctx.save(); ctx.translate(z.x, z.y); ctx.rotate(z.d); ctx.globalAlpha = 0.38;
+    ctx.fillStyle = renk[z.c % renk.length]; ctx.fillRect(-1.3 * z.s, -0.65 * z.s, 2.6 * z.s, 1.3 * z.s);
+    ctx.restore();
+  }
 }
 
 function bounceFx() { shake = Math.min(12, shake + 1.6); Sound.play('bounce'); buzz(15); }
@@ -4924,6 +5048,8 @@ function drawUnit(u, isActive, t) {
 function rocketSmoke(p) {
   const v = Math.hypot(p.vx, p.vy) || 1, bx = p.x - p.vx / v * 11, by = p.y - p.vy / v * 11;
   parts.push({ kind: 'smoke', x: bx + (Math.random() - 0.5) * 2, y: by + (Math.random() - 0.5) * 2, vx: -p.vx / v * 14, vy: -p.vy / v * 14 - 6, g: -12, size: 3.6 + Math.random() * 2.2, life: 0.7, max: 0.7 });
+  // Egzoz alevi: namlunun hemen arkasında kısa, titrek, toplamsal
+  parts.push({ kind: 'ates', x: p.x - p.vx / v * 8, y: p.y - p.vy / v * 8, vx: -p.vx / v * 40, vy: -p.vy / v * 40, g: 0, size: rnd(2.2, 3.6), life: rnd(0.08, 0.14), max: 0.14 });
 }
 
 function drawProjectile(p, t) {
@@ -5054,6 +5180,41 @@ function drawPortal(P, t) {
 }
 
 function drawParticles() {
+  // Normal karışımlı yeni katmanlar: duman (büyür, koyudan açığa) önce; toplamsal olanlar (parlama, ateş, kıvılcım, alev, kor) en sonda
+  for (const p of parts) {
+    if (p.kind !== 'duman') continue;
+    const f = 1 - Math.max(0, p.life / p.max), al = (p.soluk ?? 0.55) * Math.min(1, f * 6) * (1 - f), R = p.size * (1 + (p.buyu - 1) * f) * 1.3;
+    ctx.globalAlpha = al; ctx.drawImage(yumusakDaire(rampa(RENK.duman, f)), p.x - R, p.y - R, R * 2, R * 2);
+  }
+  ctx.globalAlpha = 1;
+  ctx.save(); ctx.globalCompositeOperation = 'lighter';
+  for (const p of parts) {
+    const k = p.kind;
+    if (k !== 'parlama' && k !== 'halka' && k !== 'ates' && k !== 'kivilcim' && k !== 'alev' && k !== 'kor') continue;
+    const f = 1 - Math.max(0, p.life / p.max);
+    if (k === 'parlama') {
+      const c = rampa(RENK.parlama, f), R = p.size * (0.55 + f * 0.45), g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, R);
+      g.addColorStop(0, `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${(1 - f) * 0.95})`); g.addColorStop(1, `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},0)`);
+      ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, Math.PI * 2); ctx.fill();
+    } else if (k === 'halka') {
+      ctx.strokeStyle = `rgba(255,236,200,${(1 - f) * 0.7})`; ctx.lineWidth = 1 + (1 - f) * 4;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.25 + f * 0.75), 0, Math.PI * 2); ctx.stroke();
+    } else if (k === 'kivilcim') {
+      const c = rampa(RENK.kivilcim, f), v = Math.hypot(p.vx, p.vy) || 1, L = Math.min(14, 2 + v * 0.018);
+      ctx.strokeStyle = `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${1 - f})`; ctx.lineWidth = p.size; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x - p.vx / v * L, p.y - p.vy / v * L); ctx.stroke();
+    } else if (k === 'kor') {
+      const c = rampa(RENK.kivilcim, f);
+      ctx.fillStyle = `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${(1 - f) * (0.6 + 0.4 * Math.sin(p.life * 30))})`;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+    } else {   // ateş topu / alev dili: büyüyüp söner, alev biraz titrer
+      const c = rampa(k === 'alev' ? RENK.alev : RENK.ates, f), R = p.size * (k === 'alev' ? (1 - f * 0.7) : (0.7 + Math.sin(f * Math.PI) * 0.5));
+      const x = k === 'alev' ? p.x + Math.sin(p.faz + f * 9) * 1.4 : p.x;
+      const RR = Math.max(0.5, R) * 1.6;
+      ctx.globalAlpha = (1 - f) * (k === 'alev' ? 0.9 : 0.95); ctx.drawImage(yumusakDaire(c, 0.55), x - RR, p.y - RR, RR * 2, RR * 2); ctx.globalAlpha = 1;
+    }
+  }
+  ctx.restore();
   for (const p of parts) {
     const a = Math.max(0, p.life / p.max);
     if (p.kind === 'flash') { ctx.fillStyle = `rgba(255,240,200,${a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.2 - a * 0.4), 0, Math.PI * 2); ctx.fill(); }
@@ -5121,6 +5282,8 @@ function renderIc(t) {
   const sxo = (Math.random() - 0.5) * shake, syo = (Math.random() - 0.5) * shake;
   const z = cam.z;
   ctx.setTransform(dpr * z, 0, 0, dpr * z, dpr * (vw / 2 - cam.x * z + sxo), dpr * (vh / 2 - cam.y * z + syo));
+  { const [ax, ay] = toWorld(-30, -30), [bx, by] = toWorld(vw + 30, vh + 30); zerreAlan = { x0: ax, y0: ay, x1: bx, y1: by }; }
+  zerreCiz();   // rüzgâr zerreleri arazinin arkasında
   ctx.drawImage(terr, 0, 0, W, H);
   for (const P of portals) drawPortal(P, t);
   drawAirTarget(t);
@@ -5223,9 +5386,12 @@ function updateFx(dt) {
     const a = Math.random() * 6.28, r = 90 + Math.random() * 70;
     parts.push({ kind: 'spark', c: Math.random() < 0.5 ? '#3fe0b0' : '#e6fff6', x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r, vx: -Math.cos(a) * r * 1.8, vy: -Math.sin(a) * r * 1.8, g: 0, size: 1.5 + Math.random() * 1.5, life: 0.5, max: 0.5 });
   }
+  vfxAdim(dt); zerreAdim(dt);
   for (const p of parts) {
-    p.life -= dt; p.vy += p.g * dt; p.x += p.vx * dt; p.y += p.vy * dt;
-    if (p.kind === 'dirt' && isSolid(p.x, p.y)) p.life = Math.min(p.life, 0.05);
+    p.life -= dt; p.vy += p.g * dt;
+    if (p.surt) { const k = Math.exp(-p.surt * dt); p.vx *= k; p.vy *= k; }   // sürtünme (W.M.D FinalSpeedFactor)
+    p.x += p.vx * dt; p.y += p.vy * dt;
+    if ((p.kind === 'dirt' || p.kind === 'kivilcim') && isSolid(p.x, p.y)) p.life = Math.min(p.life, 0.05);
     if (p.kind === 'water' && p.y > WATER + 6) p.life = 0;
   }
   parts = parts.filter(p => p.life > 0);
