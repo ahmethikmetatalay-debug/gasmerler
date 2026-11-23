@@ -924,6 +924,11 @@ const Sound = (() => {
         for (const [f, a, d] of [[523, 0.16, 0.9], [1311, 0.1, 0.7], [2087, 0.06, 0.5], [2967, 0.04, 0.35]]) osc('sine', f, f * 0.995, t, d, a);
         break;
       }
+      case 'agirDemir': {   // demir mezar taşı yere düşer: derin gümleme + ağır, uzun çınlayan metal
+        osc('sine', 95, 42, t, 0.32, 0.55); nz(t, 0.14, 0.45, 'lowpass', 520, 120);
+        for (const [f, a, d] of [[173, 0.2, 1.3], [418, 0.12, 1], [731, 0.08, 0.7], [1187, 0.045, 0.45]]) osc('triangle', f, f * 0.985, t + 0.01, d, a);
+        break;
+      }
       case 'demirVur': {   // mermi demire çarpar: tok vuruş ve titreyen tını
         nz(t, 0.06, 0.5, 'bandpass', 1800, 600);
         for (const [f, a, d] of [[220, 0.22, 0.8], [587, 0.14, 0.6], [943, 0.09, 0.45], [1630, 0.05, 0.3]]) osc('triangle', f, f * 0.97, t, d, a);
@@ -1223,6 +1228,16 @@ function airStep(b, dt, onImpact) {
   b.x = clamp(b.x, -100, W + 100);
 }
 
+// Asker yere iner: düşme hasarı + iniş tozu; yatay hızla iniyorsa kayma tozu (aynı askerden 0,15 sn'de bir)
+function inis(u, speed) {
+  fallDamage(u, speed);
+  if (!u.isUnit) return;
+  const simdi = performance.now();
+  if (u._tozT && simdi - u._tozT < 150) return;
+  u._tozT = simdi;
+  if (speed > 220) vfx('inis', u.x, u.y, clamp((speed - 220) / 520, 0, 1));
+  if (Math.abs(u.vx) > 70) vfx('kayma', u.x, u.y, Math.sign(u.vx) * clamp(Math.abs(u.vx) / 320, 0.25, 1));
+}
 function fallDamage(u, speed) {
   if (!u.isUnit || speed < 520) return;   // eşik ~8 asker boyu düşüş (W.M.D 7-10)
   const d = Math.min(25, Math.round((speed - 520) / 30));   // yumuşak artış: 10 boy ~2, 20 boy ~10
@@ -1691,6 +1706,16 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['27.2', '23 Kasım 2026', [
+    ['y', 'İniş ve kayma tozu: yüksekten düşen ya da savrulup yere sürten askerin altından toz ve taş saçılır'],
+    ['y', 'Mağara tozu: tavanın altındaki patlamada yukarıdan toz ve kırıntı dökülür'],
+    ['y', 'Mezar taşı yere düşünce toz kalkar ve ağır bir demir sesi çıkar'],
+    ['y', 'Bazuka namlusunda kısa parlama ve duman; uçan roketin arkasında saniyede bir duman halkası'],
+    ['y', 'Dinamit ve el bombasının fitilinden kıvılcım çıkar, patlamaya az kala hızlanır'],
+    ['y', 'Barikata çarpan patlama ve mermilerde metal kıvılcımı; Delici Roket toprağa girip çıkarken toz fışkırtır'],
+    ['y', 'Suya düşen asker ve mezarda büyük su sıçraması, yüzeyde halka dalgalar ve yükselen kabarcıklar'],
+    ['y', 'Portal geçişinde renkli şok halkası ve parıltı; sırası gelen askerin etrafında takım renginde halka'],
+  ]],
   ['27.1', '23 Kasım 2026', [
     ['y', 'Patlamalar yeniden yapıldı: ani parlama, şok halkası, ateş topları, kıvılcımlar, uçuşan toprak ve yükselip açılan duman'],
     ['y', 'Krater birkaç saniye tüter ve kor saçar; büyük patlamalardan sonra kenarda küçük alevler yanar (yalnız görsel)'],
@@ -2017,7 +2042,7 @@ function shieldFx(u) { const i = units.indexOf(u); bubbles.push({ i, t: 0 }); So
 function drown(u) {
   credit(u, u.hp); hasarVar = true;
   u.alive = false; u.hp = 0; closePortalsOf(u);
-  splash(u.x, WATER);
+  splash(u.x, WATER, 1);
   addPop(u.x, WATER - 30, 'Boğuldu', '#9fd4ff');
   olumOlayi(u, true);
 }
@@ -2073,7 +2098,11 @@ function kapanAdim() {
 // Barikat vuruş sayar: ilk vuruş iz bırakmaz, ikincide eğilip paslanır, üçüncüde kopar
 function barikatHasar(x, y, r) {
   let vurdu = false;
-  for (const b of barikatlar) if (barikatUzak(b, x, y) < r * 1.5) { b.vurus = (b.vurus || 0) + 1; vurdu = true; }
+  for (const b of barikatlar) if (barikatUzak(b, x, y) < r * 1.5) {
+    b.vurus = (b.vurus || 0) + 1; vurdu = true;
+    const c = Math.cos(b.a), sn = Math.sin(b.a), t = clamp((x - b.x) * c + (y - b.y) * sn, -BARIKAT_L / 2, BARIKAT_L / 2);
+    vfx('metal', b.x + t * c, b.y + t * sn);   // demirin patlamaya en yakın noktası
+  }
   if (vurdu) sesYay('demirVur');
   const kopan = barikatlar.filter(b => b.vurus >= BARIKAT_VURUS);
   if (!kopan.length) return;
@@ -2166,6 +2195,7 @@ function stepDrill(p) {
         const v = Math.hypot(p.vx, p.vy) || 1;
         p.dx = p.vx / v; p.dy = p.vy / v; p.vx = p.dx * DELME_V; p.vy = p.dy * DELME_V;
         p.grounded = true; p.delme = DELME_MESAFE; p.kazi = 99; p.bosluk = 0;
+        vfx('delgi', p.x, p.y, Math.atan2(p.dy, p.dx));
         return;
       }
     }
@@ -2188,6 +2218,7 @@ function stepDrill(p) {
     if (!araziKati(p.x + p.dx * (DELME_R + 2), p.y + p.dy * (DELME_R + 2)) && !araziKati(p.x + p.dx * 4, p.y + p.dy * 4)) {
       if (++p.bosluk > 3) {
         p.grounded = false; p.cikti = true;
+        vfx('delgi', p.x, p.y, Math.atan2(p.dy, p.dx) + Math.PI);
         p.vx = p.dx * DELME_CIKIS_V; p.vy = p.dy * DELME_CIKIS_V;
         p.dmg = Math.round(p.dmg * DELME_CIKIS_GUC); p.r = Math.round(p.r * 0.75);
         return;
@@ -2676,6 +2707,7 @@ function mermiAt(u, w, power, slot = 0) {
   if (w === 'punch') { doPunch(power, u); return; }
   const dx = Math.cos(u.aim) * u.facing, dy = Math.sin(u.aim);
   const sx = u.x + dx * 24, sy = u.y - AIM_Y + dy * 24, sp = 120 + power * 880;
+  if (NAMLU_SILAH.has(w)) namluFx(u);
   // v26 hasarları W.M.D'ye göre (100 can): bazuka ailesi 45, el bombası 45, misket 20 + 5×10, ördekler 65 (koyun), dinamit 65
   if (w === 'bazooka') addProj({ type: 'rocket', x: sx, y: sy, vx: dx * sp, vy: dy * sp, wind: true, impact: true, r: 42, dmg: 45, age: 0, atan: ui });
   else if (w === 'grenade') addProj({ type: 'grenade', x: sx, y: sy, vx: dx * sp, vy: dy * sp, fuse: u.team.fitil || FITIL_VARSAYILAN, bounce: 0.5, r: 46, dmg: 45, age: 0, atan: ui });
@@ -3070,7 +3102,23 @@ function explodeFx(x, y, r, ses) {
 // ekranında rastgele üretir (ağdan gitmez). Katmanlar: parlama + şok halkası (kısa, toplamsal) → ateş topları →
 // ağır kıvılcım çizgileri ve toprak parçaları → yükselip büyüyen, koyudan açığa dönen duman → kalıcı krater dumanı,
 // korlar ve kenarda yanan küçük alevler. Parçacık sayısı patlama boyuna göre ölçeklenir ve parts 700 ile sınırlı.
-let yayicilar = [];   // { tur: 'krater'|'alev', x, y, t, max, acc }
+let yayicilar = [], siraSon = null;
+// Fitil kıvılcımı: dinamit ve el bombasının fitilinden sürekli kıvılcım; son 1,5 sn'de hızlanır (yalnız görsel)
+function fitilAdim(dt) {
+  for (const p of projs) {
+    if ((p.type !== 'dynamite' && p.type !== 'grenade') || !(p.fuse > 0)) continue;
+    p._fk = (p._fk || 0) + dt * (p.fuse < 1.5 ? 40 : 20);
+    // fitilin ucu: dinamit dönmeden (6,5; −20), konserve x ile dönerek (3; −10,8) çiziliyor (drawProjectile)
+    let ux, uy;
+    if (p.type === 'dynamite') { ux = p.x + 6.5; uy = p.y - 20; }
+    else { const r = p.x * 0.12, c = Math.cos(r), sn = Math.sin(r); ux = p.x + 3 * c + 10.8 * sn; uy = p.y + 3 * sn - 10.8 * c; }
+    while (p._fk >= 1) {
+      p._fk--;
+      const a = -Math.PI / 2 + rnd(-1.1, 1.1), v = rnd(30, 110);
+      parts.push({ kind: 'kivilcim', x: ux, y: uy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: 300, surt: 1, size: rnd(0.7, 1.2), life: rnd(0.15, 0.35), max: 0.35 });
+    }
+  }
+}   // { tur: 'krater'|'alev', x, y, t, max, acc }
 const rnd = (a, b) => a + Math.random() * (b - a);
 // 3 duraklı renk rampası: f = ömür oranı (0 doğum, 1 ölüm)
 function rampa(c, f) {
@@ -3098,6 +3146,65 @@ function yumusakDaire(c, sert = 0.35) {
   }
   return cv2;
 }
+// Oda sahibinin fiziğinden doğan görsel olaylar (iniş, kayma, mezar düşmesi, metal kıvılcımı, delici roket tozu):
+// oda sahibi/yerel kendi ekranında çizer ve misafirlere 'vf' mesajıyla yollar (eski sürüm misafir bilmediği mesajı yok sayar).
+function vfx(k, x, y, a = 0) { vfxYap(k, x, y, a); emit({ t: 'vf', k, x: r1(x), y: r1(y), a: r2(a) }); }
+const TOZ_RENK = [[170, 150, 130], [196, 182, 166], [214, 206, 196]];
+function tozBulut(x, y, n, hiz, yon = 0, buyukluk = 1) {   // yerden yelpaze gibi açılan toz bulutu (W.M.D PFX_Land: 9 bulut, 190°)
+  for (let i = 0; i < n; i++) {
+    const a = Math.PI + Math.random() * Math.PI + (yon ? -yon * 0.6 : 0), v = hiz * rnd(0.4, 1.1);
+    parts.push({ kind: 'toz', x: x + rnd(-6, 6), y: y - 2, vx: Math.cos(a) * v + yon * hiz * 0.6, vy: Math.sin(a) * v * 0.45, g: -14, surt: 2.4, size: rnd(3, 5.5) * buyukluk, buyu: 2.2, life: rnd(0.6, 1.1), max: 1.1 });
+  }
+}
+function taslar(x, y, n, hiz, c) {
+  for (let i = 0; i < n; i++) { const a = -Math.PI * rnd(0.1, 0.9), v = hiz * rnd(0.5, 1.2); parts.push({ kind: 'dirt', c, x: x + rnd(-5, 5), y: y - 2, vx: Math.cos(a) * v, vy: Math.sin(a) * v, g: G, size: rnd(1.5, 3), life: rnd(0.5, 0.8), max: 0.8 }); }
+}
+function vfxYap(k, x, y, a) {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  a = Number.isFinite(a) ? clamp(a, -6.3, 6.3) : 0;
+  if (k === 'inis') { tozBulut(x, y, Math.round(4 + a * 6), 50 + a * 70, 0, 0.8 + a * 0.5); if (a > 0.35) taslar(x, y, Math.round(a * 8), 160); }
+  else if (k === 'kayma') {   // a: yön × şiddet; toz hareketin arkasına ve yere yakın savrulur
+    const yon = Math.sign(a) || 1, s = Math.min(1, Math.abs(a));
+    for (let i = 0; i < 5 + s * 7; i++) parts.push({ kind: 'toz', x: x - yon * rnd(0, 14), y: y - 2, vx: -yon * rnd(20, 90) * s, vy: rnd(-30, -8), g: -8, surt: 2, size: rnd(2.5, 4.5), buyu: 2, life: rnd(0.5, 0.9), max: 0.9 });
+    taslar(x, y, Math.round(2 + s * 4), 90);
+  }
+  else if (k === 'mezar') {   // demir mezar taşı yere oturur: küçük toz bulutu + ağır demir sesi (hayalet dumanı yok)
+    tozBulut(x, y, 7, 55 + a * 40, 0, 0.9); taslar(x, y, 4, 110);
+    Sound.play('agirDemir'); shake = Math.min(12, shake + 1.5 + a * 2); buzz(30);
+  }
+  else if (k === 'metal') {   // demire çarpma: sarı kıvılcım çizgileri
+    for (let i = 0; i < 12; i++) { const an = Math.random() * 6.28, v = rnd(180, 460); parts.push({ kind: 'kivilcim', x, y, vx: Math.cos(an) * v, vy: Math.sin(an) * v - 60, g: 700, surt: 1.2, size: rnd(0.9, 1.5), life: rnd(0.25, 0.5), max: 0.5 }); }
+    parts.push({ kind: 'parlama', x, y, size: 16, life: 0.12, max: 0.12, vx: 0, vy: 0, g: 0 });
+  }
+  else if (k === 'delgi') {   // delici roket toprağa girer/çıkar: a = gidiş açısı; toz ve kırıntı ters yöne fışkırır
+    const gx = -Math.cos(a), gy = -Math.sin(a);
+    for (let i = 0; i < 9; i++) { const sp = rnd(30, 110); parts.push({ kind: 'toz', x, y, vx: gx * sp + rnd(-30, 30), vy: gy * sp + rnd(-30, 10), g: 10, surt: 2.2, size: rnd(2.5, 4.5), buyu: 2.2, life: rnd(0.6, 1), max: 1 }); }
+    for (let i = 0; i < 8; i++) { const sp = rnd(120, 260); parts.push({ kind: 'dirt', x, y, vx: gx * sp + rnd(-60, 60), vy: gy * sp + rnd(-60, 20), g: G, size: rnd(1.5, 3), life: rnd(0.5, 0.8), max: 0.8 }); }
+  }
+}
+// Mağara tozu: patlamanın üstünde (r + 90 px içinde) tavan varsa oradan ince toz ve kırıntı dökülür
+function magaraTozu(x, y, r) {
+  let n = 0;
+  for (let k = -3; k <= 3 && n < 5; k++) {
+    const px = x + k * r * 0.35;
+    for (let py = y - r - 4; py > y - r - 90 && py > 0; py -= 3) {
+      if (isSolid(px, py)) {   // tavan bulundu: hemen altı boş
+        n++;
+        for (let i = 0; i < 4; i++) parts.push({ kind: 'dirt', x: px + rnd(-6, 6), y: py + 3, vx: rnd(-10, 10), vy: rnd(0, 30), g: 380, size: rnd(1, 2.2), life: rnd(0.8, 1.4), max: 1.4 });
+        for (let i = 0; i < 2; i++) parts.push({ kind: 'toz', x: px + rnd(-6, 6), y: py + 4, vx: rnd(-6, 6), vy: rnd(10, 30), g: 20, surt: 1.2, size: rnd(2, 3.5), buyu: 2.4, life: rnd(1, 1.6), max: 1.6, soluk: 0.35 });
+        break;
+      }
+    }
+  }
+}
+// Bazuka (ve roket ailesi) namlusu: kısa parlama + ileri doğru dağılan duman
+function namluFx(u) {
+  if (!u) return;
+  const dx = Math.cos(u.aim) * u.facing, dy = Math.sin(u.aim), x = u.x + dx * 26, y = u.y - AIM_Y + dy * 26;
+  parts.push({ kind: 'parlama', x, y, size: 20, life: 0.13, max: 0.13, vx: 0, vy: 0, g: 0 });
+  for (let i = 0; i < 7; i++) { const v = rnd(40, 160); parts.push({ kind: 'duman', x, y, vx: dx * v + rnd(-25, 25), vy: dy * v + rnd(-25, 15) - 10, g: -20, surt: 3, size: rnd(3, 5), buyu: 2.4, life: rnd(0.5, 0.9), max: 0.9, soluk: 0.5 }); }
+}
+const NAMLU_SILAH = new Set(['bazooka', 'drill', 'guided', 'rduck']);
 function vfxPatlama(x, y, r) {
   const s = clamp(r / 42, 0.35, 1.8);   // bazuka = 1
   parts.push({ kind: 'parlama', x, y, size: r * 2.2, life: 0.3, max: 0.3, vx: 0, vy: 0, g: 0 });
@@ -3118,6 +3225,7 @@ function vfxPatlama(x, y, r) {
     const a = Math.random() * 6.28, v = rnd(20, 90) * s;
     parts.push({ kind: 'duman', x: x + Math.cos(a) * r * 0.3, y: y + Math.sin(a) * r * 0.3, vx: Math.cos(a) * v, vy: Math.sin(a) * v - 25, g: -38, surt: 1.4, size: r * rnd(0.24, 0.36), buyu: rnd(1.8, 2.5), life: rnd(1.6, 2.6), max: 2.6 });
   }
+  magaraTozu(x, y, r);
   // Kalıcı krater dumanı ve korlar; büyük patlamada kenarda yanan küçük alevler
   if (yayicilar.length < 14) yayicilar.push({ tur: 'krater', x, y: y + r * 0.35, t: 0, max: 3.5 + s * 1.5, acc: 0, r });
   const alevSay = r >= 40 ? 3 : r >= 28 ? 2 : r >= 20 && Math.random() < 0.4 ? 1 : 0;
@@ -3137,6 +3245,10 @@ function vfxAdim(dt) {
   for (const e of yayicilar) {
     e.t += dt; e.acc += dt;
     const sonma = Math.max(0, 1 - e.t / e.max);
+    if (e.tur === 'kabarcik') {   // suya batanın ardından yüzeye kabarcık
+      while (e.acc > 0.09) { e.acc -= 0.09; if (Math.random() < sonma + 0.2) parts.push({ kind: 'kabarcik', x: e.x + rnd(-10, 10), y: e.y + rnd(0, 14), vx: rnd(-6, 6), vy: rnd(-60, -35), g: -40, size: rnd(1.4, 3.2), life: 1.6, max: 1.6, faz: Math.random() * 6 }); }
+      continue;
+    }
     if (e.tur === 'krater') {
       while (e.acc > 0.4) {
         e.acc -= 0.4;
@@ -3192,15 +3304,39 @@ function bounce() { bounceFx(); emit({ t: 'bo' }); }
 
 function portalFx(x, y, i) {
   Sound.sample('portalGec') || Sound.play('portal');
-  for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, s = 30 + Math.random() * 90; parts.push({ kind: 'spark', c: PORTAL_COLORS[i], x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, g: 0, size: 2 + Math.random() * 2, life: 0.5, max: 0.5 }); }
+  portalGecisFx(x, y, i);
   emit({ t: 'pt', x: r1(x), y: r1(y), i });
 }
+const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+// Portal geçişi (W.M.D TeleportIn/Out): saçılan kıvılcım + portal renginde şok halkası + yukarı akan parıltı
+function portalGecisFx(x, y, i) {
+  const c = PORTAL_COLORS[i] || PORTAL_COLORS[0];
+  for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, sp = 30 + Math.random() * 90; parts.push({ kind: 'spark', c, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 0, size: 2 + Math.random() * 2, life: 0.5, max: 0.5 }); }
+  parts.push({ kind: 'halka', c: hexRgb(c), x, y, size: 46, life: 0.45, max: 0.45, vx: 0, vy: 0, g: 0 });
+  for (let k = 0; k < 12; k++) parts.push({ kind: 'spark', c: k % 3 ? c : '#ffffff', x: x + rnd(-14, 14), y: y + rnd(-6, 10), vx: rnd(-12, 12), vy: rnd(-40, -10), g: -260, size: rnd(1.2, 2.4), life: rnd(0.45, 0.75), max: 0.75 });
+}
+// Sıra başlangıcı: sırası gelen askerin etrafında takım renginde iki halka ve kısa parıltı
+function siraFx(u) {
+  if (!u || !u.alive || !u.team) return;
+  const c = hexRgb(u.team.c || '#ffffff'), y = u.y - UNIT_H / 2;
+  parts.push({ kind: 'halka', c, x: u.x, y, size: 44, life: 0.55, max: 0.55, vx: 0, vy: 0, g: 0 });
+  parts.push({ kind: 'halka', c, x: u.x, y, size: 30, life: 0.4, max: 0.4, vx: 0, vy: 0, g: 0 });
+  for (let k = 0; k < 10; k++) { const a = Math.random() * 6.28; parts.push({ kind: 'spark', c: u.team.c, x: u.x + Math.cos(a) * 16, y: y + Math.sin(a) * 16, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40 - 20, g: -60, size: rnd(1.2, 2.2), life: 0.5, max: 0.5 }); }
+}
 
-function splash(x, y) { splashFx(x, y); emit({ t: 'sp', x: r1(x), y: r1(y) }); }
-function splashFx(x, y) {
+function splash(x, y, b = 0) { splashFx(x, y, b); emit({ t: 'sp', x: r1(x), y: r1(y), b: b ? 1 : 0 }); }
+// b: büyük sıçrama (suya düşen asker ya da mezar): yükselen su sütunu, yanlara taç, yüzeyde halka dalgalar ve
+// ardından 2 sn yükselen kabarcıklar. Küçük (mermi): eski damlalar + tek dalga.
+function splashFx(x, y, b) {
   holdCam(x, y - 40); roketSus();
   Sound.sample('su') || Sound.play('splash');
   for (let i = 0; i < 16; i++) parts.push({ kind: 'water', x: x + (Math.random() - 0.5) * 12, y, vx: (Math.random() - 0.5) * 160, vy: -120 - Math.random() * 220, g: G, size: 2 + Math.random() * 2.5, life: 0.9, max: 0.9 });
+  parts.push({ kind: 'dalga', x, y: WATER + 2, vx: 0, vy: 0, g: 0, size: b ? 70 : 34, life: 0.9, max: 0.9 });
+  if (!b) return;
+  for (let i = 0; i < 22; i++) parts.push({ kind: 'water', x: x + rnd(-7, 7), y, vx: rnd(-40, 40), vy: rnd(-560, -300), g: G, size: rnd(2.5, 4.5), life: 1.3, max: 1.3 });   // sütun
+  for (let i = 0; i < 18; i++) { const yon = i % 2 ? 1 : -1; parts.push({ kind: 'water', x: x + yon * rnd(6, 14), y, vx: yon * rnd(90, 240), vy: rnd(-300, -150), g: G, size: rnd(2, 3.5), life: 1.1, max: 1.1 }); }   // taç
+  parts.push({ kind: 'dalga', x, y: WATER + 2, vx: 0, vy: 0, g: 0, size: 110, life: 1.4, max: 1.4 });
+  if (yayicilar.length < 16) yayicilar.push({ tur: 'kabarcik', x, y: WATER + 26, t: 0, max: 2.2, acc: 0 });
 }
 
 function addPop(x, y, text, c) {
@@ -3249,7 +3385,7 @@ function stepProjectile(p) {
         const dot = p.vx * nrm.x + p.vy * nrm.y;
         if (dot < 0) { p.vx -= 2 * dot * nrm.x; p.vy -= 2 * dot * nrm.y; }
         p.vx *= p.bounce; p.vy *= p.bounce;
-        if (speed > 140) { if (barikatlar.length && barikatIci(p.x + p.vx * 0.01, p.y + p.vy * 0.01)) sesYay('demirVur'); else bounce(); }
+        if (speed > 140) { if (barikatlar.length && barikatIci(p.x + p.vx * 0.01, p.y + p.vy * 0.01)) { sesYay('demirVur'); vfx('metal', p.x, p.y); } else bounce(); }
         if (Math.hypot(p.vx, p.vy) < 35) { p.vx = 0; p.vy = 0; p.resting = true; }
         break;
       }
@@ -3327,7 +3463,7 @@ function step() {
     if (!u.alive) continue;
     if (u.pcd) u.pcd = Math.max(0, u.pcd - DT);
     if (u.grounded && !isSolid(u.x, u.y + 1)) { u.grounded = false; u.vx = 0; u.vy = 0; }
-    if (!u.grounded) airStep(u, DT, fallDamage);
+    if (!u.grounded) airStep(u, DT, inis);
     teleportUnit(u);
     if (u.y > WATER + 6) drown(u);
   }
@@ -3337,7 +3473,10 @@ function step() {
   if (kapanlar.length) kapanAdim();
   if (yapiskanlar.length || teams.some(t => t.ammo[WI('remote')])) yapiskanAdim();
   // Mezar: altı boşalırsa düşer (kendisini katı saymaz), suya düşerse kaybolur
-  for (const g of graves) if (!mezarIci(g.x, g.y + 1, g) && !araziKati(g.x, g.y + 1) && !araziKati(g.x - 9, g.y + 1) && !araziKati(g.x + 9, g.y + 1)) { g.y += 2; if (g.y > WATER + 4) { g.dead = true; splash(g.x, WATER); } }
+  for (const g of graves) {
+    if (!mezarIci(g.x, g.y + 1, g) && !araziKati(g.x, g.y + 1) && !araziKati(g.x - 9, g.y + 1) && !araziKati(g.x + 9, g.y + 1)) { g.y += 2; g.dus = (g.dus || 0) + 2; if (g.y > WATER + 4) { g.dead = true; splash(g.x, WATER, 1); } }
+    else if (g.dus) { if (g.dus >= 6) vfx('mezar', g.x, g.y, clamp(g.dus / 80, 0, 1)); g.dus = 0; }   // yere oturdu: toz + ağır demir sesi
+  }
   if (graves.some(g => g.dead)) graves = graves.filter(g => !g.dead);
 
   if (kacisT > 0 && (state === 'fly' || state === 'settle')) {   // atıştan sonra kaçış
@@ -3697,9 +3836,10 @@ function onClientData(m) {
     case 'turn': if (!teams.length) break; turnTeam = m.tt | 0; closeWeaponMenu(); announceTurn(); break;
     case 'yer': if (!teams.length) break; turnTeam = m.tt | 0; closeWeaponMenu(); yerIlan(); break;
     case 'x': if (inGame && terr) explodeFx(+m.x, +m.y, +m.r, m.s === 'elBomba' ? 'elBomba' : undefined); break;
-    case 'sp': if (inGame) splashFx(+m.x, +m.y); break;
+    case 'sp': if (inGame) splashFx(+m.x, +m.y, m.b === 1); break;
+    case 'vf': if (inGame && terr && ['inis', 'kayma', 'mezar', 'metal', 'delgi'].includes(m.k)) vfxYap(m.k, +m.x, +m.y, +m.a); break;   // oda sahibinin fiziğinden görsel olay
     case 'bo': if (inGame) bounceFx(); break;
-    case 'fi': if (inGame) atesSesi(String(m.w)); break;
+    case 'fi': if (inGame) { atesSesi(String(m.w)); if (NAMLU_SILAH.has(String(m.w)) && active && !kaosTur) namluFx(active); } break;
     case 'sf': if (inGame && Sound.has(String(m.n))) Sound.sample(String(m.n), { o: m.o == null ? undefined : +m.o, delay: +m.d || 0, vol: m.v == null ? 1 : +m.v }); break;
     case 'pk': if (inGame) Sound.play('sandik'); break;
     case 'dd': if (inGame) dudukFx(m.i | 0); break;
@@ -3722,7 +3862,7 @@ function onClientData(m) {
     case 'pu': if (inGame && units[m.i | 0]) { units[m.i | 0].punchT = 0.3; punchSesi(m.h); if (m.h) { shake = Math.min(12, shake + 4); buzz(35); } } break;
     case 'el': if (inGame) elektrikFx(+m.x, +m.y, m.i | 0); break;
     case 'dg': if (inGame && terr) { carve(+m.x, +m.y, clamp(+m.r, 4, 30)); kurekSesi(); } break;
-    case 'pt': if (inGame) { const i = m.i ? 1 : 0; Sound.sample('portalGec') || Sound.play('portal'); for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, s = 30 + Math.random() * 90; parts.push({ kind: 'spark', c: PORTAL_COLORS[i], x: +m.x, y: +m.y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, g: 0, size: 2 + Math.random() * 2, life: 0.5, max: 0.5 }); } } break;
+    case 'pt': if (inGame) { Sound.sample('portalGec') || Sound.play('portal'); portalGecisFx(+m.x, +m.y, m.i ? 1 : 0); } break;
     case 'pop': if (inGame) pops.push({ x: +m.x, y: +m.y, t: 0, text: String(m.text).slice(0, 24), c: String(m.c) }); break;
     case 'bn': if (inGame) { showBanner(String(m.text).slice(0, 60), String(m.c)); if (m.s) { Sound.sample(String(m.s)) || Sound.play(m.s === 'altin' ? 'pickup' : m.s); buzz(120); } } break;
     case 'over':
@@ -5046,6 +5186,9 @@ function drawUnit(u, isActive, t) {
 
 // Pet şişe roketin kapağından çıkan duman (alev yok)
 function rocketSmoke(p) {
+  const simdi = performance.now();
+  if (!p._hz) p._hz = simdi;
+  else if (simdi - p._hz > 1000) { p._hz = simdi; parts.push({ kind: 'rhalka', x: p.x, y: p.y, vx: 0, vy: -8, g: 0, size: 22, life: 0.9, max: 0.9 }); }
   const v = Math.hypot(p.vx, p.vy) || 1, bx = p.x - p.vx / v * 11, by = p.y - p.vy / v * 11;
   parts.push({ kind: 'smoke', x: bx + (Math.random() - 0.5) * 2, y: by + (Math.random() - 0.5) * 2, vx: -p.vx / v * 14, vy: -p.vy / v * 14 - 6, g: -12, size: 3.6 + Math.random() * 2.2, life: 0.7, max: 0.7 });
   // Egzoz alevi: namlunun hemen arkasında kısa, titrek, toplamsal
@@ -5182,9 +5325,14 @@ function drawPortal(P, t) {
 function drawParticles() {
   // Normal karışımlı yeni katmanlar: duman (büyür, koyudan açığa) önce; toplamsal olanlar (parlama, ateş, kıvılcım, alev, kor) en sonda
   for (const p of parts) {
-    if (p.kind !== 'duman') continue;
-    const f = 1 - Math.max(0, p.life / p.max), al = (p.soluk ?? 0.55) * Math.min(1, f * 6) * (1 - f), R = p.size * (1 + (p.buyu - 1) * f) * 1.3;
-    ctx.globalAlpha = al; ctx.drawImage(yumusakDaire(rampa(RENK.duman, f)), p.x - R, p.y - R, R * 2, R * 2);
+    if (p.kind === 'rhalka') {   // roketin arkasında genişleyip sönen duman halkası
+      const f = 1 - Math.max(0, p.life / p.max);
+      ctx.strokeStyle = `rgba(200,192,196,${(1 - f) * 0.45})`; ctx.lineWidth = 2.5 * (1 - f) + 0.5;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.25 + f * 0.75), 0, Math.PI * 2); ctx.stroke(); continue;
+    }
+    if (p.kind !== 'duman' && p.kind !== 'toz') continue;
+    const f = 1 - Math.max(0, p.life / p.max), al = (p.soluk ?? (p.kind === 'toz' ? 0.8 : 0.55)) * Math.min(1, f * 6) * (1 - f), R = p.size * (1 + (p.buyu - 1) * f) * 1.3;
+    ctx.globalAlpha = al; ctx.drawImage(yumusakDaire(rampa(p.kind === 'toz' ? TOZ_RENK : RENK.duman, f)), p.x - R, p.y - R, R * 2, R * 2);
   }
   ctx.globalAlpha = 1;
   ctx.save(); ctx.globalCompositeOperation = 'lighter';
@@ -5197,7 +5345,7 @@ function drawParticles() {
       g.addColorStop(0, `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${(1 - f) * 0.95})`); g.addColorStop(1, `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},0)`);
       ctx.fillStyle = g; ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, Math.PI * 2); ctx.fill();
     } else if (k === 'halka') {
-      ctx.strokeStyle = `rgba(255,236,200,${(1 - f) * 0.7})`; ctx.lineWidth = 1 + (1 - f) * 4;
+      ctx.strokeStyle = p.c ? `rgba(${p.c[0]},${p.c[1]},${p.c[2]},${(1 - f) * 0.8})` : `rgba(255,236,200,${(1 - f) * 0.7})`; ctx.lineWidth = 1 + (1 - f) * 4;
       ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (0.25 + f * 0.75), 0, Math.PI * 2); ctx.stroke();
     } else if (k === 'kivilcim') {
       const c = rampa(RENK.kivilcim, f), v = Math.hypot(p.vx, p.vy) || 1, L = Math.min(14, 2 + v * 0.018);
@@ -5226,6 +5374,20 @@ function drawParticles() {
   }
 }
 
+// Suyun önünde çizilen parçacıklar: yükselen kabarcıklar ve yüzeyde yayılan halka dalgalar
+function suUstuCiz() {
+  for (const p of parts) {
+    if (p.kind === 'kabarcik') {
+      const a = Math.min(1, p.life / 0.25) * 0.8;
+      ctx.strokeStyle = `rgba(220,245,255,${a})`; ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(p.x + Math.sin(p.life * 12 + p.faz) * 1.5, p.y, p.size, 0, Math.PI * 2); ctx.stroke();
+      ctx.fillStyle = `rgba(255,255,255,${a * 0.6})`; ctx.fillRect(p.x - p.size * 0.4, p.y - p.size * 0.5, 1, 1);
+    } else if (p.kind === 'dalga') {
+      const f = 1 - p.life / p.max;
+      ctx.strokeStyle = `rgba(210,240,255,${(1 - f) * 0.55})`; ctx.lineWidth = 1.6 * (1 - f) + 0.4;
+      ctx.beginPath(); ctx.ellipse(p.x, p.y, p.size * (0.2 + f), p.size * (0.2 + f) * 0.18, 0, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+}
 function drawWater(t, x0, x1) {
   if (aktifHarita === 'hurda') return HARITA_HURDA_PNG.su(ctx, t, x0, x1, WATER);
   const wave = (x, k) => WATER + Math.sin(x * 0.018 + t * 1.4 + k) * 3 + Math.sin(x * 0.043 - t * 0.9) * 1.6;
@@ -5334,6 +5496,7 @@ function renderIc(t) {
   for (const u of units) if (u.alive && u.yanik > 0) { ctx.save(); ctx.translate(u.x, u.y - 34); YENI.asitYanik(ctx, t); ctx.restore(); }
   const [wx0] = toWorld(-40, 0), [wx1] = toWorld(vw + 40, 0);
   drawWater(t, Math.floor(wx0 / 12) * 12, wx1);
+  suUstuCiz();   // kabarcıklar ve yüzey dalgaları suyun önünde
 
   // Ekran-uzayı etiketler: zum ne olursa olsun okunur kalsın
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -5386,12 +5549,15 @@ function updateFx(dt) {
     const a = Math.random() * 6.28, r = 90 + Math.random() * 70;
     parts.push({ kind: 'spark', c: Math.random() < 0.5 ? '#3fe0b0' : '#e6fff6', x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r, vx: -Math.cos(a) * r * 1.8, vy: -Math.sin(a) * r * 1.8, g: 0, size: 1.5 + Math.random() * 1.5, life: 0.5, max: 0.5 });
   }
-  vfxAdim(dt); zerreAdim(dt);
+  vfxAdim(dt); zerreAdim(dt); fitilAdim(dt);
+  if (state === 'aim' && !kaosTur && active && active.alive) { if (active !== siraSon) { siraSon = active; siraFx(active); } }
+  else if (state !== 'aim' && state !== 'fly' && state !== 'settle') siraSon = null;
   for (const p of parts) {
     p.life -= dt; p.vy += p.g * dt;
     if (p.surt) { const k = Math.exp(-p.surt * dt); p.vx *= k; p.vy *= k; }   // sürtünme (W.M.D FinalSpeedFactor)
     p.x += p.vx * dt; p.y += p.vy * dt;
     if ((p.kind === 'dirt' || p.kind === 'kivilcim') && isSolid(p.x, p.y)) p.life = Math.min(p.life, 0.05);
+    if (p.kind === 'kabarcik' && p.y < WATER + 1) p.life = 0;   // yüzeye çıkınca patlar
     if (p.kind === 'water' && p.y > WATER + 6) p.life = 0;
   }
   parts = parts.filter(p => p.life > 0);
@@ -6258,7 +6424,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 
 // Otomatik testler için iç duruma erişim; sadece adres ?test ile açılınca
 if (new URLSearchParams(location.search).has('test')) window.__t = {
-  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
+  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
