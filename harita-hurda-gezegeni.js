@@ -172,6 +172,6 @@ const HARITA_HURDA_PNG = (() => {
     ad: 'Hurda Gezegeni', W, H,
     get hazir() { return hazir; },
     yukle, uret, arazi, arkaPlan, su,
-    tema: { oyuk: 'rgba(22,16,14,.78)', toz: ['#2f6b3e', '#7fd3b0', '#c98a3a', '#d9d2c0', '#5b5148', '#9aa0a8'] },
+    tema: { oyuk: 'rgba(22,16,14,.78)', krater: { koyu: [20, 14, 11], yanik: [74, 54, 38] }, toz: ['#2f6b3e', '#7fd3b0', '#c98a3a', '#d9d2c0', '#5b5148', '#9aa0a8'] },
   };
 })();
