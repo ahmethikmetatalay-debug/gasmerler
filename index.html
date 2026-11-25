@@ -19,6 +19,8 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@800&text=%C5%9E%C5%9F%C4%9E%C4%9F&display=swap">
 <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 <script src="harita-hurda-gezegeni.js"></script>
+<script src="harita-parcalar-veri.js"></script>
+<script src="harita-rastgele.js"></script>
 <style>
 /* Layout: full-bleed canvas battlefield at dusk; HUD chips float on the safe-area edges, thumb controls in the bottom corners */
 :root{
@@ -452,6 +454,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
           <span class="flabel">Başlangıç</span>
           <div class="seg"><button id="lyRast" aria-pressed="true">Rastgele</button><button id="lyNomad" aria-pressed="false">Nomad</button></div>
         </div>
+        <div class="field">
+          <span class="flabel">Harita</span>
+          <div class="seg"><button id="lhSabit" aria-pressed="true">Sabit</button><button id="lhRast" aria-pressed="false">Rastgele</button></div>
+        </div>
         <button class="go" id="lobbyStart" hidden>Savaşı başlat</button>
         <button class="go" id="rejoinBtn" hidden>Maça geri dön</button>
         <p class="status" id="lobbyStatus"></p>
@@ -511,6 +517,10 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         <div class="field">
           <span class="flabel">Başlangıç</span>
           <div class="seg"><button id="yRast" aria-pressed="true">Rastgele</button><button id="yNomad" aria-pressed="false">Nomad</button></div>
+        </div>
+        <div class="field">
+          <span class="flabel">Harita</span>
+          <div class="seg"><button id="hSabit" aria-pressed="true">Sabit</button><button id="hRast" aria-pressed="false">Rastgele</button></div>
         </div>
         <button class="go" id="startBtn">Savaşı başlat</button>
         </div>
@@ -645,7 +655,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v28-';
+const ID_PREFIX = 'gasmerler-v29-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1005,7 +1015,7 @@ function buzz(ms) {
 // Arazi şekli her maç aynı tohumla rastgele üretilir; tema sadece görünümü belirler.
 // v28: Plastik Evrim haritası kaldırıldı (kullanıcı kararı); tek harita Hurda Gezegeni (katmanlı PNG, gömülü maske)
 const HARITALAR = ['hurda'];
-let aktifHarita = 'hurda', haritaDuvar = false, haritaAyna = false;   // haritaAyna: Hurda Gezegeni yatayda ters (tohuma göre rastgele)
+let aktifHarita = 'hurda', haritaDuvar = false, haritaAyna = false, haritaRastgele = false;   // haritaRastgele: parçalı rastgele Hurda (harita-rastgele.js)   // haritaAyna: Hurda Gezegeni yatayda ters (tohuma göre rastgele)
 const TEMA = {
   ad: 'Plastik Evrim Gezegeni',
   gok: ['#1e2433', '#4a3f5c', '#c9a25e'],          // gökyüzü: üst, orta, ufuk
@@ -1062,8 +1072,13 @@ const araziKati = (x, y) => { x |= 0; y |= 0; return x >= 0 && x < W && y >= 0 &
 function genTerrain() {
   Object.assign(TEMA, TEMA_PLASTIK);   // varsayılan tema değerleri; Hurda kendi değerleriyle üzerine yazar
   solid = new Uint8Array(W * H);
-  HARITA_HURDA_PNG.uret(solid, haritaAyna);                       // gömülü maske: her telefonda aynı
-  ({ terr, tctx } = HARITA_HURDA_PNG.arazi(haritaAyna));       // tuvale dünya koordinatlarıyla çizilir
+  if (haritaRastgele) {   // parçalı rastgele harita: tohumdan kurulur, maske gömülü RLE'den (her telefonda aynı)
+    HARITA_RASTGELE.kur(solid, macId);
+    ({ terr, tctx } = HARITA_RASTGELE.arazi());
+  } else {
+    HARITA_HURDA_PNG.uret(solid, haritaAyna);                       // gömülü maske: her telefonda aynı
+    ({ terr, tctx } = HARITA_HURDA_PNG.arazi(haritaAyna));       // tuvale dünya koordinatlarıyla çizilir
+  }
   haritaDuvar = true;
   Object.assign(TEMA, HARITA_HURDA_PNG.tema);
 }
@@ -1289,9 +1304,11 @@ function myTurn() { if (mode === 'local') return true; const t = team(); return 
 // Hurda Gezegeni resimleri henüz yüklenmediyse önce yükle, sonra başlat
 function haritaIleBaslat(opts, sonra) {
   const go = () => { startGame(opts); if (sonra) sonra(); };
-  if (!HARITA_HURDA_PNG.hazir) {
+  const rast = opts.harita === 'rastgele';
+  const yukle = () => Promise.all([HARITA_HURDA_PNG.yukle(), rast ? HARITA_RASTGELE.yukle() : null]);
+  if (!HARITA_HURDA_PNG.hazir || (rast && !HARITA_RASTGELE.hazir)) {
     toast('Harita yükleniyor…');
-    HARITA_HURDA_PNG.yukle().then(go, () => HARITA_HURDA_PNG.yukle().then(go, () => toast('Harita yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.')));
+    yukle().then(go, () => yukle().then(go, () => toast('Harita yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.')));
   } else go();
 }
 
@@ -1299,8 +1316,8 @@ let macId = 0, kayitliMac = 0;
 function startGame(opts) {
   macId = opts.seed >>> 0;
   rng = mulberry32(opts.seed >>> 0);
-  aktifHarita = 'hurda';
-  haritaAyna = ((Math.imul(opts.seed >>> 0, 2654435761) >>> 16) & 1) === 1;   // tohuma göre yatayda ters
+  aktifHarita = 'hurda'; haritaRastgele = opts.harita === 'rastgele';
+  haritaAyna = !haritaRastgele && ((Math.imul(opts.seed >>> 0, 2654435761) >>> 16) & 1) === 1;   // tohuma göre yatayda ters (rastgele haritada parçalar kendi aynalanır)
   W = HARITA_HURDA_PNG.W;
   genTerrain();
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
@@ -1651,6 +1668,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['29', '26 Kasım 2026', [
+    ['y', 'Rastgele harita: ayarlarda Harita > Rastgele seçilirse Hurda Gezegeni her maç parçalardan yeniden kurulur (zemin zinciri, su boşlukları, yüzen adalar ve köprüler)'],
+  ]],
   ['28.4', '25 Kasım 2026', [
     ['y', 'Portallar üst üste gelip kara delik açılınca portal oluşma sesi çalar'],
     ['d', 'Kara delik efekti portallar birleştiği an başlar (gecikmiyor) ve patlama sesi bitene kadar sürer'],
@@ -2447,7 +2467,7 @@ function drawZaplar() {
 // Hurda Gezegeni'nin elle çizilmiş koordinatı → dünya (ayna haritada x ters döner)
 function hx(x) { return haritaAyna ? W - x : x; }
 // Altın sandığın rafı: kolonla kapalı kuytu; maç başında orada kimse başlamaz
-function altinRafi(x, y) { const gx = haritaAyna ? W - x : x; return gx > 330 && gx < 535 && y > 440 && y < 545; }
+function altinRafi(x, y) { if (haritaRastgele) return false; const gx = haritaAyna ? W - x : x; return gx > 330 && gx < 535 && y > 440 && y < 545; }
 // Gömülü altın sandık yalnız Plastik Evrim'deydi (v28'de harita kaldırıldı); Hurda'da Hele İki Gözüm düşen sandıktan çıkar
 function buryGoldCrates() { return []; }
 
@@ -3987,8 +4007,8 @@ function onClientData(m) {
     case 'lobby':
       players = Array.isArray(m.players) ? m.players.slice(0, MAX_PLAYERS).map(p => ({ name: String(p.name).slice(0, 14), slot: p.slot | 0, side: sideNo(p.side) })) : [];
       lobbyTeams = m.nteam === 3 ? 3 : 2;
-      mySlot = m.you | 0; lobbySize = clamp(m.size | 0, 2, 4); lobbyMode = m.mode === 'team' ? 'team' : 'ffa'; lobbyHarita = 'hurda'; lobbyYer = m.yer === 'nomad' ? 'nomad' : 'rastgele'; roomCode = String(m.code || roomCode).slice(0, 4); inGame = false;
-      if (lobbyHarita === 'hurda') HARITA_HURDA_PNG.yukle().catch(() => {});
+      mySlot = m.you | 0; lobbySize = clamp(m.size | 0, 2, 4); lobbyMode = m.mode === 'team' ? 'team' : 'ffa'; lobbyHarita = m.harita === 'rastgele' ? 'rastgele' : 'hurda'; lobbyYer = m.yer === 'nomad' ? 'nomad' : 'rastgele'; roomCode = String(m.code || roomCode).slice(0, 4); inGame = false;
+      HARITA_HURDA_PNG.yukle().catch(() => {}); if (lobbyHarita === 'rastgele') HARITA_RASTGELE.yukle().catch(() => {});
       $('joinGo').disabled = false;
       if (state !== 'menu') exitToMenuUI();
       inGame = false;   // oda sahibi lobiye döndü: süren maç yok
@@ -6312,6 +6332,8 @@ function renderLobby(msg) {
   $('lt2').disabled = $('lt3').disabled = !host;
   $('lyRast').setAttribute('aria-pressed', String(lobbyYer !== 'nomad')); $('lyNomad').setAttribute('aria-pressed', String(lobbyYer === 'nomad'));
   $('lyRast').disabled = $('lyNomad').disabled = !host;
+  $('lhSabit').setAttribute('aria-pressed', String(lobbyHarita !== 'rastgele')); $('lhRast').setAttribute('aria-pressed', String(lobbyHarita === 'rastgele'));
+  $('lhSabit').disabled = $('lhRast').disabled = !host;
   [2, 3, 4].forEach(n => { const b = $('ls' + n); b.setAttribute('aria-pressed', String(n === lobbySize)); b.disabled = !host; });
   $('lobbyStart').hidden = !host; $('lobbyStart').disabled = players.length < 2 || !roomCode || !sidesReady();
   $('lobbyStatus').textContent = msg || (host
@@ -6442,6 +6464,13 @@ $('yRast').addEventListener('click', () => setLocalYer('rastgele'));
 $('yNomad').addEventListener('click', () => setLocalYer('nomad'));
 $('lyRast').addEventListener('click', () => setLobbyYer('rastgele'));
 $('lyNomad').addEventListener('click', () => setLobbyYer('nomad'));
+// Harita: Sabit (elle çizilmiş Hurda Gezegeni) ya da Rastgele (parçalardan her maç yeni arazi)
+function setLocalHarita(h) { config.harita = h; $('hSabit').setAttribute('aria-pressed', String(h !== 'rastgele')); $('hRast').setAttribute('aria-pressed', String(h === 'rastgele')); if (h === 'rastgele') HARITA_RASTGELE.yukle().catch(() => {}); }
+function setLobbyHarita(h) { if (mode !== 'host') return; lobbyHarita = h; if (h === 'rastgele') HARITA_RASTGELE.yukle().catch(() => {}); renderLobby(); broadcastLobby(); }
+$('hSabit').addEventListener('click', () => setLocalHarita('hurda'));
+$('hRast').addEventListener('click', () => setLocalHarita('rastgele'));
+$('lhSabit').addEventListener('click', () => setLobbyHarita('hurda'));
+$('lhRast').addEventListener('click', () => setLobbyHarita('rastgele'));
 $('leaveBtn').addEventListener('click', leaveRoom);
 // Menüdeki geri ok: bulunulan ekrana göre bir önceki ekrana
 $('statsBtn').addEventListener('click', () => showView('vStats'));
@@ -6563,7 +6592,7 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
   get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wfxParca() { return wfxParca; }, get wfxHazir() { return wfxHazir(); }, set wfxMod(v) { wfxMod = !!v; }, wfxCal, blackHole, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
-  Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
+  Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaRastgele() { return haritaRastgele; }, HARITA_RASTGELE, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
   get players() { return players; }, get yapiskanlar() { return yapiskanlar; }, get barikatlar() { return barikatlar; }, lootTablosu, get terr() { return terr; }, GASMER, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, benimKaos, kaosBirimim, get kaosKazilar() { return kaosKazilar; }, toScreen, get input() { return input; }, get jetKul() { return jetKul; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, set kaosIlan(v) { kaosIlan = v; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
 
