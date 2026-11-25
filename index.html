@@ -903,6 +903,13 @@ const Sound = (() => {
       case 'pickup': osc('square', hz(76), 0, t, 0.09, 0.07); osc('square', hz(81), 0, t + 0.08, 0.09, 0.07); osc('square', hz(88), 0, t + 0.16, 0.2, 0.07); break;
       case 'portal': osc('sine', 260, 1500, t, 0.28, 0.22); osc('sine', 520, 2400, t + 0.04, 0.22, 0.08); break;
       case 'turn': osc('triangle', hz(84), 0, t, 0.22, 0.16); osc('triangle', hz(88), 0, t + 0.12, 0.35, 0.16); break;
+      case 'portalOlus': {   // iki portal birleşir: yükselen girdap uğultusu, titreşen ışık akoru, tiz parıltılar, tok "vuup"
+        nz(t, 0.75, 0.32, 'bandpass', 260, 3400);
+        osc('sine', 180, 52, t, 0.5, 0.35);
+        for (const [f0, f1, a, gec] of [[330, 990, 0.12, 0], [415, 1245, 0.09, 0.03], [495, 1485, 0.07, 0.06]]) { osc('sine', f0, f1, t + gec, 0.7, a); osc('triangle', f0 * 1.01, f1 * 1.01, t + gec, 0.6, a * 0.5); }
+        for (let k = 0; k < 6; k++) osc('sine', 2200 + k * 380, 3300 + k * 420, t + 0.25 + k * 0.07, 0.18, 0.035);
+        break;
+      }
       case 'hole': osc('sine', 95, 26, t, 1.45, 0.5); nz(t, 1.4, 0.3, 'lowpass', 320, 60); osc('sawtooth', 50, 30, t, 1.4, 0.06); break;
       case 'traitor': osc('sawtooth', 220, 110, t, 0.5, 0.12); osc('sawtooth', 233, 116, t, 0.5, 0.1); break;
       case 'punch': osc('sine', 170, 55, t, 0.16, 0.7); nz(t, 0.09, 0.35, 'lowpass', 1400, 300); break;
@@ -1250,6 +1257,7 @@ function blackHole(x, y) {
   if (team()) team().weapon = 0;
   showBanner('KARA DELİK!', '#3fe0b0'); Sound.play('hole'); buzz(150);
   emit({ t: 'bn', text: 'KARA DELİK!', c: '#3fe0b0', s: 'hole' });
+  sesYay('portalOlus');   // portallar birleşti: portal oluşma sesi (herkes duyar)
 }
 function stepBlackHole(p) {
   p.fuse -= DT;
@@ -1643,6 +1651,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['28.4', '25 Kasım 2026', [
+    ['y', 'Portallar üst üste gelip kara delik açılınca portal oluşma sesi çalar'],
+    ['d', 'Kara delik efekti portallar birleştiği an başlar (gecikmiyor) ve patlama sesi bitene kadar sürer'],
+  ]],
   ['28.3', '25 Kasım 2026', [
     ['d', 'Kara delik: turkuaz girdap yerine ışınlanma efekti; kara delik durduğu sürece döner, patlayınca sesle birlikte söner'],
   ]],
@@ -3757,7 +3769,7 @@ function kabloZamani() {
 }
 function toastAll(text) { toast(text); emit({ t: 'toast', text }); }
 // Kodla üretilen bir sesi herkeste çalar
-const YAYIN_SES = new Set(['dingDing', 'bip', 'yapis', 'dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir', 'traitor', 'demir', 'demirVur']);
+const YAYIN_SES = new Set(['portalOlus', 'dingDing', 'bip', 'yapis', 'dirilt', 'kapan', 'kapanKur', 'duduk', 'asit', 'bant', 'mezarKir', 'traitor', 'demir', 'demirVur']);
 function sesYay(n) { Sound.play(n); emit({ t: 'ps', n }); }
 function teamGone(t) {
   if (mode !== 'host' || !t || t.slot === undefined || t.slot === 0) return false;
@@ -5667,7 +5679,12 @@ function updateFx(dt) {
   // yeniden başlar; her tekrar kalan fitil + patlama sesinin duyulan kısmı kadar sürer (patlamayla birlikte söner)
   if (wfxHazir()) {
     const simdi = performance.now();
-    for (const h of projs) if (h.type === 'bhole' && (!h._kdT || simdi - h._kdT > KD_DONGU_MS)) { h._kdT = simdi; wfxCal('spawn', h.x, h.y, { bitir: Math.max(0, h.fuse || 0) + KD_SES_SN, sonme: KD_SONME, olcek: KD_OLCEK, alfa: KD_ALFA }); }
+    for (const h of projs) if (h.type === 'bhole' && (!h._kdT || simdi - h._kdT > KD_DONGU_MS)) {
+      const bitir = Math.max(0, h.fuse || 0) + KD_SES_SN;
+      if (!h._kdT) wfxCal('teleportin', h.x, h.y, { bitir, sonme: KD_SONME, olcek: KD_OLCEK, alfa: KD_ALFA * 1.2 });   // oluştuğu an: hemen görünen büyük açılış
+      h._kdT = simdi;
+      wfxCal('spawn', h.x, h.y, { bitir, sonme: KD_SONME, olcek: KD_OLCEK, alfa: KD_ALFA });
+    }
   }
   // Kara deliğe doğru çekilen kıvılcımlar (her ekranda yerel olarak üretilir; W.M.D efektleri kapalıysa)
   else for (const h of projs) if (h.type === 'bhole') for (let i = 0; i < 3; i++) {
@@ -6543,7 +6560,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 
 // Otomatik testler için iç duruma erişim; sadece adres ?test ile açılınca
 if (new URLSearchParams(location.search).has('test')) window.__t = {
-  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wfxParca() { return wfxParca; }, get wfxHazir() { return wfxHazir(); }, set wfxMod(v) { wfxMod = !!v; }, wfxCal, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
+  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wfxParca() { return wfxParca; }, get wfxHazir() { return wfxHazir(); }, set wfxMod(v) { wfxMod = !!v; }, wfxCal, blackHole, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
