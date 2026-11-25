@@ -1643,6 +1643,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['28.2', '25 Kasım 2026', [
+    ['d', 'Kara delik patlaması: ateşli patlama efekti kaldırıldı, yerine ışınlanma parıltısı; parıltı patlama sesiyle aynı anda biter'],
+  ]],
   ['28.1', '25 Kasım 2026', [
     ['d', 'Kara delik patlamasındaki ışınlanma parıltısı patlama sesi bitince kaybolur'],
     ['d', 'Sprey Jet eski sprey efektine döndü'],
@@ -3024,8 +3027,9 @@ function explodeFx(x, y, r, ses, kd) {
   carve(x, y, r, true);
   shake = Math.min(12, shake + r * 0.18);
   Sound.sample(ses || (r <= 32 ? 'kucuk' : 'buyuk')) || Sound.play('boom', r); buzz(r > 35 ? 70 : 40);
-  vfxPatlama(x, y, r);
-  if (kd && wfxHazir()) wfxCal('teleportin', x, y, { bitir: KD_SES_SN });   // kara delik patlarken W.M.D ışınlanma parıltısı; patlama sesiyle biter
+  // Kara delik: normal patlama efekti (ateş, duman, alev) yok; yalnız W.M.D ışınlanma parıltısı, sesin duyulan kısmıyla biter
+  if (kd) { if (wfxHazir()) wfxCal('teleportin', x, y, { bitir: KD_SES_SN, sonme: KD_SONME }); }
+  else vfxPatlama(x, y, r);
 }
 
 // ---- Görsel efektler (VFX): W.M.D'nin PFX_MediumExplosion tarifinden uyarlandı. Yalnız görsel, her telefon kendi
@@ -3084,7 +3088,7 @@ function yumusakDaire(c, sert = 0.35) {
 const WFX_OLCEK = 0.5;          // W.M.D birimi → Gaşmerler px (solucan ~60 birim, asker 30 px)
 const WFX_EN_COK = 3000;
 const WFX_SONME = 0.15;
-const KD_SES_SN = 1.15;           // kara delik patlama sesi: buyuk-patlama.mp3 1,40 sn − baştaki 0,25 sn sessizlik          // kesin bitişte (o.bitir) parçacıkların sönme süresi        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
+const KD_SES_SN = 0.55, KD_SONME = 0.2;   // kara delik: buyuk-patlama.mp3'ün duyulan kısmı ~0,7 sn (0,7. sn'de zirveden 25 dB aşağı); 0,55'te söner, 0,75'te biter          // kesin bitişte (o.bitir) parçacıkların sönme süresi        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
 let wfxMod = false, wfxVeri = null, wfxYukleniyor = false, wfxYayici = [], wfxParca = [];
 // v27.4: W.M.D ayarlı efektler varsayılan ve tek seçenek (kullanıcı kararı). efekt-wmd.js açılışta yüklenir; yüklenemezse
 // (bağlantı koptu vb.) eski kodla çizilen efektler yedek olarak çalışır. İleride grafik ayarlarına "efektleri kapat" eklenebilir.
@@ -3104,7 +3108,7 @@ function wfxCal(ad, x, y, o = {}) {
   const tanim = wfxVeri && wfxVeri[ad];
   if (!tanim) return false;
   const grup = [];
-  for (const d of tanim) { const e = { d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, takipU: o.takipU ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1, bitir: o.bitir ?? null }; wfxYayici.push(e); grup.push(e); }
+  for (const d of tanim) { const e = { d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, takipU: o.takipU ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1, bitir: o.bitir ?? null, sonme: o.sonme ?? WFX_SONME }; wfxYayici.push(e); grup.push(e); }
   return grup;
 }
 const wfxRnd = () => Math.random() * 2 - 1;
@@ -3137,7 +3141,7 @@ function wfxAdim(dt) {
     e.t += dt;
     if (e.bitir !== null && !e.bitti && e.t + (e.d.gec || 0) >= e.bitir) {   // kesin bitiş: yayma durur, parçacıklar hızla söner
       e.bitti = true; e.sure = Math.min(e.sure, Math.max(0, e.t));
-      for (const p of wfxParca) if (p.e === e && p.sonT === undefined) p.sonT = WFX_SONME;
+      for (const p of wfxParca) if (p.e === e && p.sonT === undefined) { p.sonT = e.sonme; p.sonM = e.sonme; }
     }
     if (e.t < 0) continue;
     if (e.takip !== null) { const pr = projs.find(q => q.id === e.takip); if (pr) { e.x = pr.x; e.y = pr.y; } else e.sure = Math.min(e.sure, e.t); }
@@ -3248,7 +3252,7 @@ function wfxCiz(arka = false) {
       const r1 = d.r1a * q, r2 = d.r1b * q, r3 = d.r2a * q, r4 = d.r2b * q;
       const ch = k => wfxEgri(en, r1, r2, r3, r4, d.c0[k], d.c1[k], d.c2[k]);
       al *= ch(3);
-      if (p.sonT !== undefined) al *= Math.max(0, p.sonT / WFX_SONME);   // kesin bitişte sönme
+      if (p.sonT !== undefined) al *= Math.max(0, p.sonT / (p.sonM || WFX_SONME));   // kesin bitişte sönme
       if (al <= 0.01) continue;
       ctx.globalAlpha = Math.min(1, al);
       const img = wfxBoya(d.doku, p.fr, ch(0), ch(1), ch(2));
