@@ -1643,6 +1643,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['28.3', '25 Kasım 2026', [
+    ['d', 'Kara delik: turkuaz girdap yerine ışınlanma efekti; kara delik durduğu sürece döner, patlayınca sesle birlikte söner'],
+  ]],
   ['28.2', '25 Kasım 2026', [
     ['d', 'Kara delik patlaması: ateşli patlama efekti kaldırıldı, yerine ışınlanma parıltısı; parıltı patlama sesiyle aynı anda biter'],
   ]],
@@ -3028,7 +3031,7 @@ function explodeFx(x, y, r, ses, kd) {
   shake = Math.min(12, shake + r * 0.18);
   Sound.sample(ses || (r <= 32 ? 'kucuk' : 'buyuk')) || Sound.play('boom', r); buzz(r > 35 ? 70 : 40);
   // Kara delik: normal patlama efekti (ateş, duman, alev) yok; yalnız W.M.D ışınlanma parıltısı, sesin duyulan kısmıyla biter
-  if (kd) { if (wfxHazir()) wfxCal('teleportin', x, y, { bitir: KD_SES_SN, sonme: KD_SONME }); }
+  if (kd) { if (wfxHazir()) wfxCal('teleportin', x, y, { bitir: KD_SES_SN, sonme: KD_SONME, olcek: KD_OLCEK * 1.2, alfa: KD_ALFA * 1.3 }); }
   else vfxPatlama(x, y, r);
 }
 
@@ -3088,7 +3091,7 @@ function yumusakDaire(c, sert = 0.35) {
 const WFX_OLCEK = 0.5;          // W.M.D birimi → Gaşmerler px (solucan ~60 birim, asker 30 px)
 const WFX_EN_COK = 3000;
 const WFX_SONME = 0.15;
-const KD_SES_SN = 0.55, KD_SONME = 0.2;   // kara delik: buyuk-patlama.mp3'ün duyulan kısmı ~0,7 sn (0,7. sn'de zirveden 25 dB aşağı); 0,55'te söner, 0,75'te biter          // kesin bitişte (o.bitir) parçacıkların sönme süresi        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
+const KD_SES_SN = 0.55, KD_SONME = 0.2, KD_DONGU_MS = 500, KD_OLCEK = 0.45, KD_ALFA = 0.4;   // boyut/parlaklık: W.M.D'deki solucan ışınlama boyutunda beyaza boğuyordu   // kara delik dururken 'spawn' yayıcıları 0,5 sn yayar: bitince yeniden (üst üste binmez)   // kara delik: buyuk-patlama.mp3'ün duyulan kısmı ~0,7 sn (0,7. sn'de zirveden 25 dB aşağı); 0,55'te söner, 0,75'te biter          // kesin bitişte (o.bitir) parçacıkların sönme süresi        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
 let wfxMod = false, wfxVeri = null, wfxYukleniyor = false, wfxYayici = [], wfxParca = [];
 // v27.4: W.M.D ayarlı efektler varsayılan ve tek seçenek (kullanıcı kararı). efekt-wmd.js açılışta yüklenir; yüklenemezse
 // (bağlantı koptu vb.) eski kodla çizilen efektler yedek olarak çalışır. İleride grafik ayarlarına "efektleri kapat" eklenebilir.
@@ -3108,7 +3111,7 @@ function wfxCal(ad, x, y, o = {}) {
   const tanim = wfxVeri && wfxVeri[ad];
   if (!tanim) return false;
   const grup = [];
-  for (const d of tanim) { const e = { d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, takipU: o.takipU ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1, bitir: o.bitir ?? null, sonme: o.sonme ?? WFX_SONME }; wfxYayici.push(e); grup.push(e); }
+  for (const d of tanim) { const e = { d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, takipU: o.takipU ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1, alfa: o.alfa ?? 1, bitir: o.bitir ?? null, sonme: o.sonme ?? WFX_SONME }; wfxYayici.push(e); grup.push(e); }
   return grup;
 }
 const wfxRnd = () => Math.random() * 2 - 1;
@@ -3253,6 +3256,7 @@ function wfxCiz(arka = false) {
       const ch = k => wfxEgri(en, r1, r2, r3, r4, d.c0[k], d.c1[k], d.c2[k]);
       al *= ch(3);
       if (p.sonT !== undefined) al *= Math.max(0, p.sonT / (p.sonM || WFX_SONME));   // kesin bitişte sönme
+      al *= p.e.alfa;   // efekte özel parlaklık çarpanı (o.alfa)
       if (al <= 0.01) continue;
       ctx.globalAlpha = Math.min(1, al);
       const img = wfxBoya(d.doku, p.fr, ch(0), ch(1), ch(2));
@@ -5342,8 +5346,8 @@ function drawProjectile(p, t) {
     ctx.rotate(p.x * 0.2);
     HURDA.kapak(ctx, p.ci);
   } else if (p.type === 'bhole') {
-    // Işık saçan yeşil girdap, etrafında dönen taşlar
-    OBJE.karaDelik(ctx, clamp(1 - (p.fuse || 0) / 1.4, 0, 1), t);
+    // Işık saçan yeşil girdap, etrafında dönen taşlar. W.M.D efektleri açıkken girdap yerine W.M.D ışınlanma efekti (updateFx)
+    if (!wfxHazir()) OBJE.karaDelik(ctx, clamp(1 - (p.fuse || 0) / 1.4, 0, 1), t);
   } else if (p.type === 'tas') {
     // Kara delik patlayınca saçılan taş
     ctx.rotate(p.x * 0.07 + p.id);
@@ -5659,8 +5663,14 @@ function renderIc(t) {
 }
 
 function updateFx(dt) {
-  // Kara deliğe doğru çekilen kıvılcımlar (her ekranda yerel olarak üretilir)
-  for (const h of projs) if (h.type === 'bhole') for (let i = 0; i < 3; i++) {
+  // Kara delik (W.M.D efektleri açıkken): turkuaz girdap ve kıvılcımlar yerine W.M.D 'spawn' efekti (parlama + dikey ışık + halka), 0,5 sn'de bir
+  // yeniden başlar; her tekrar kalan fitil + patlama sesinin duyulan kısmı kadar sürer (patlamayla birlikte söner)
+  if (wfxHazir()) {
+    const simdi = performance.now();
+    for (const h of projs) if (h.type === 'bhole' && (!h._kdT || simdi - h._kdT > KD_DONGU_MS)) { h._kdT = simdi; wfxCal('spawn', h.x, h.y, { bitir: Math.max(0, h.fuse || 0) + KD_SES_SN, sonme: KD_SONME, olcek: KD_OLCEK, alfa: KD_ALFA }); }
+  }
+  // Kara deliğe doğru çekilen kıvılcımlar (her ekranda yerel olarak üretilir; W.M.D efektleri kapalıysa)
+  else for (const h of projs) if (h.type === 'bhole') for (let i = 0; i < 3; i++) {
     const a = Math.random() * 6.28, r = 90 + Math.random() * 70;
     parts.push({ kind: 'spark', c: Math.random() < 0.5 ? '#3fe0b0' : '#e6fff6', x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r, vx: -Math.cos(a) * r * 1.8, vy: -Math.sin(a) * r * 1.8, g: 0, size: 1.5 + Math.random() * 1.5, life: 0.5, max: 0.5 });
   }
