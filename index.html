@@ -1643,6 +1643,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['28.1', '25 Kasım 2026', [
+    ['d', 'Kara delik patlamasındaki ışınlanma parıltısı patlama sesi bitince kaybolur'],
+    ['d', 'Sprey Jet eski sprey efektine döndü'],
+  ]],
   ['28', '25 Kasım 2026', [
     ['k', 'Plastik Evrim haritası kaldırıldı: oyun artık yalnız Hurda Gezegeni haritasında oynanır (harita seçimi kalktı)'],
     ['d', 'Portaldan geçişte eski parıltı ve renkli halka; W.M.D ışınlanma efekti yalnız kara delik patladığında çıkar'],
@@ -3021,7 +3025,7 @@ function explodeFx(x, y, r, ses, kd) {
   shake = Math.min(12, shake + r * 0.18);
   Sound.sample(ses || (r <= 32 ? 'kucuk' : 'buyuk')) || Sound.play('boom', r); buzz(r > 35 ? 70 : 40);
   vfxPatlama(x, y, r);
-  if (kd && wfxHazir()) wfxCal('teleportin', x, y);   // kara delik patlarken W.M.D ışınlanma parıltısı (yalnız burada)
+  if (kd && wfxHazir()) wfxCal('teleportin', x, y, { bitir: KD_SES_SN });   // kara delik patlarken W.M.D ışınlanma parıltısı; patlama sesiyle biter
 }
 
 // ---- Görsel efektler (VFX): W.M.D'nin PFX_MediumExplosion tarifinden uyarlandı. Yalnız görsel, her telefon kendi
@@ -3078,7 +3082,9 @@ function yumusakDaire(c, sert = 0.35) {
 // (parçacık sayısı, oran, ömür, hız, yerçekimi, sürtünme, 3 duraklı boyut/renk/alfa eğrisi, dönme, toplamsal karışım).
 // Dokular kodla üretilir (W.M.D'nin çizimleri kullanılmaz). Yalnız görsel; her telefon kendi seçer, ağ etkilenmez.
 const WFX_OLCEK = 0.5;          // W.M.D birimi → Gaşmerler px (solucan ~60 birim, asker 30 px)
-const WFX_EN_COK = 3000;        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
+const WFX_EN_COK = 3000;
+const WFX_SONME = 0.15;
+const KD_SES_SN = 1.15;           // kara delik patlama sesi: buyuk-patlama.mp3 1,40 sn − baştaki 0,25 sn sessizlik          // kesin bitişte (o.bitir) parçacıkların sönme süresi        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
 let wfxMod = false, wfxVeri = null, wfxYukleniyor = false, wfxYayici = [], wfxParca = [];
 // v27.4: W.M.D ayarlı efektler varsayılan ve tek seçenek (kullanıcı kararı). efekt-wmd.js açılışta yüklenir; yüklenemezse
 // (bağlantı koptu vb.) eski kodla çizilen efektler yedek olarak çalışır. İleride grafik ayarlarına "efektleri kapat" eklenebilir.
@@ -3098,7 +3104,7 @@ function wfxCal(ad, x, y, o = {}) {
   const tanim = wfxVeri && wfxVeri[ad];
   if (!tanim) return false;
   const grup = [];
-  for (const d of tanim) { const e = { d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, takipU: o.takipU ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1 }; wfxYayici.push(e); grup.push(e); }
+  for (const d of tanim) { const e = { d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, takipU: o.takipU ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1, bitir: o.bitir ?? null }; wfxYayici.push(e); grup.push(e); }
   return grup;
 }
 const wfxRnd = () => Math.random() * 2 - 1;
@@ -3129,6 +3135,10 @@ function wfxAdim(dt) {
   if (!wfxYayici.length && !wfxParca.length) return;
   for (const e of wfxYayici) {
     e.t += dt;
+    if (e.bitir !== null && !e.bitti && e.t + (e.d.gec || 0) >= e.bitir) {   // kesin bitiş: yayma durur, parçacıklar hızla söner
+      e.bitti = true; e.sure = Math.min(e.sure, Math.max(0, e.t));
+      for (const p of wfxParca) if (p.e === e && p.sonT === undefined) p.sonT = WFX_SONME;
+    }
     if (e.t < 0) continue;
     if (e.takip !== null) { const pr = projs.find(q => q.id === e.takip); if (pr) { e.x = pr.x; e.y = pr.y; } else e.sure = Math.min(e.sure, e.t); }
     if (e.takipU !== null) { const u = units[e.takipU]; if (u && u.alive) { e.x = u.x - u.facing * 10; e.y = u.y - 10; } else e.sure = Math.min(e.sure, e.t); }
@@ -3143,6 +3153,7 @@ function wfxAdim(dt) {
   }
   for (const p of wfxParca) {
     p.en -= dt;
+    if (p.sonT !== undefined) { p.sonT -= dt; if (p.sonT <= 0) p.en = 0; }
     if (p.en <= 0) continue;
     p.vy += p.g * dt;
     if (p.k) { const f = Math.exp(-p.k * dt); p.vx *= f; p.vy *= f; }
@@ -3237,6 +3248,7 @@ function wfxCiz(arka = false) {
       const r1 = d.r1a * q, r2 = d.r1b * q, r3 = d.r2a * q, r4 = d.r2b * q;
       const ch = k => wfxEgri(en, r1, r2, r3, r4, d.c0[k], d.c1[k], d.c2[k]);
       al *= ch(3);
+      if (p.sonT !== undefined) al *= Math.max(0, p.sonT / WFX_SONME);   // kesin bitişte sönme
       if (al <= 0.01) continue;
       ctx.globalAlpha = Math.min(1, al);
       const img = wfxBoya(d.doku, p.fr, ch(0), ch(1), ch(2));
@@ -5668,12 +5680,7 @@ function updateFx(dt) {
   dudukler = dudukler.filter(d => d.t < 1);
   for (const k of kokular) k.t += dt;
   const ucanlar = kaosTur && kaos ? kaos.list.filter(kji).map(k => units[k.ui]).filter(u => u && u.alive && (state !== 'kaos' || u === kaosBirimim())) : jetItki && active && active.alive ? [active] : [];
-  if (wfxHazir()) {
-    for (const ju of ucanlar) { wfxJet(ju, true); wfxJet(ju, false); }   // itki: duman + kor ve alev konisi birlikte
-    const suzulen = kaosTur && kaos ? kaos.list.filter(k => kjk(k) && !kji(k)).map(k => units[k.ui]) : jetKul && !jetItki && active && active.alive && !active.grounded ? [active] : [];
-    for (const ju of suzulen) if (ju && ju.alive) wfxJet(ju, false);
-  }
-  else for (const ju of ucanlar) {
+  for (const ju of ucanlar) {   // Sprey Jet: eski sprey zerreleri (v28.1'de W.M.D jetpack alevinden geri dönüldü)
     const f = ju.facing, bx = ju.x - f * 10, by = ju.y - 10;
     for (let i = 0; i < 2; i++) parts.push({ kind: 'spark', c: YENI.SPREY_RENK[i] + '0.8)', x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 40, g: -20, size: 2 + Math.random() * 2.5, life: 0.22, max: 0.22 });
   }
