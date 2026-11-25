@@ -101,6 +101,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 .pad.wide{width:auto;min-width:104px;padding:0 12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px}
 .pad.wide small{font-size:9px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
 .pad.wide b{font-size:14px;font-weight:800;white-space:nowrap}
+#fpsSayac{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 4px);transform:translateX(-50%);z-index:60;pointer-events:none;font:700 11px/1.2 system-ui,sans-serif;color:#fff;background:rgba(0,0,0,.55);padding:3px 8px;border-radius:8px;white-space:nowrap}
 .pad.fitil{width:46px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0}
 .pad.fitil small{font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
 .pad.fitil b{font-size:18px;font-weight:800;line-height:1}
@@ -347,6 +348,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
   <div class="chip weapons" id="weaponMenu" hidden></div>
   <div class="chip bant" id="bantPanel" hidden></div>
   <div class="banner" id="banner"></div>
+  <div id="fpsSayac" hidden></div>
   <div class="chip toast" id="toast"></div>
   <div class="feed" id="feed" aria-live="polite"></div>
   <div class="konusan" id="konusan" hidden></div>
@@ -389,6 +391,7 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         <button class="link" id="localBtn">Aynı telefonda sırayla oyna</button>
         <button class="link" id="statsBtn">İstatistikler</button>
         <button class="link" id="notlarBtn">Yama notları</button>
+        <button class="link" id="gorselBtn">Görsel ayarlar</button>
         </div>
         <div class="lcol lc3">
         <p class="lead">Sırayla nişan al, araziyi patlatarak oy, rakip timleri suya dök. Ayakta kalan son tim kazanır. 6 kişiye kadar, herkes kendi telefonundan oynar.</p>
@@ -466,6 +469,23 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         </div>
         <div class="lcol lc3">
         <div class="istat yama" id="notlarBox"></div>
+        </div>
+      </section>
+
+      <section class="view" id="vGorsel" hidden>
+        <div class="lcol lc1">
+        <p class="lead">Bu ayarlar yalnız bu telefonu etkiler; aynı maçtaki diğer oyuncular kendi seçtikleriyle oynar.</p>
+        </div>
+        <div class="lcol lc3">
+        <div class="field">
+          <span class="flabel">Efektler</span>
+          <div class="seg"><button id="efNormal" aria-pressed="true">Normal</button><button id="efWmd" aria-pressed="false">W.M.D testi</button></div>
+          <p class="status">W.M.D testi: patlama, duman, toz ve kıvılcımlar Worms W.M.D'nin efekt ayarlarıyla (parçacık sayısı, ömür, boyut). Telefona yükünü ölçmek için.</p>
+        </div>
+        <div class="field">
+          <span class="flabel">FPS göster</span>
+          <div class="seg"><button id="fpsKapali" aria-pressed="true">Kapalı</button><button id="fpsAcik" aria-pressed="false">Açık</button></div>
+        </div>
         </div>
       </section>
 
@@ -1360,7 +1380,7 @@ function startGame(opts) {
   genTerrain();
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
-  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; yayicilar = []; zerreler = []; kokular = []; kapanlar = []; barikatlar = []; yapiskanlar = [];
+  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; yayicilar = []; zerreler = []; wfxYayici = []; wfxParca = []; kokular = []; kapanlar = []; barikatlar = []; yapiskanlar = [];
   turSay = 0; olaySil(); imkansizTur = -1; atanU = null; kaosIlan = false; kaosTur = false; kaos = null; dudukler = []; kaosOldu = false; $('perde').hidden = true; sakinTur = 0; hasarVar = false; asitDurum = null; cizirtilar = [];
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
@@ -1706,6 +1726,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['27.3', '25 Kasım 2026', [
+    ['y', 'Ana menüde Görsel ayarlar: efektleri Worms W.M.D ayarlarıyla deneme modu (telefona yükünü ölçmek için) ve FPS sayacı. Yalnız senin telefonunu etkiler'],
+  ]],
   ['27.2', '23 Kasım 2026', [
     ['y', 'İniş ve kayma tozu: yüksekten düşen ya da savrulup yere sürten askerin altından toz ve taş saçılır'],
     ['y', 'Mağara tozu: tavanın altındaki patlamada yukarıdan toz ve kırıntı dökülür'],
@@ -3146,6 +3169,184 @@ function yumusakDaire(c, sert = 0.35) {
   }
   return cv2;
 }
+
+// ==== W.M.D efekt testi (gizli performans test modu) ====
+// Görsel ayarlar → "Efektler: W.M.D testi" ya da adres ?wmdfx. efekt-wmd.js W.M.D'nin parçacık yayıcı AYARLARINI taşır
+// (parçacık sayısı, oran, ömür, hız, yerçekimi, sürtünme, 3 duraklı boyut/renk/alfa eğrisi, dönme, toplamsal karışım).
+// Dokular kodla üretilir (W.M.D'nin çizimleri kullanılmaz). Yalnız görsel; her telefon kendi seçer, ağ etkilenmez.
+const WFX_OLCEK = 0.5;          // W.M.D birimi → Gaşmerler px (solucan ~60 birim, asker 30 px)
+const WFX_EN_COK = 3000;        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
+let wfxMod = false, wfxVeri = null, wfxYukleniyor = false, wfxYayici = [], wfxParca = [];
+function wfxAyarOku() {
+  let m = null; try { m = localStorage.getItem('gasmer-efekt'); } catch (e) {}
+  if (/[?&]wmdfx(&|=|$)/.test(location.search)) m = 'wmd';
+  wfxMod = m === 'wmd';
+  if (wfxMod) wfxYukle(); else { wfxYayici = []; wfxParca = []; }
+}
+function wfxYukle() {
+  if (wfxVeri || wfxYukleniyor) return;
+  wfxYukleniyor = true;
+  const sc = document.createElement('script'); sc.src = 'efekt-wmd.js?v=' + encodeURIComponent(ID_PREFIX);
+  sc.onload = () => { wfxVeri = window.WMD_FX || null; wfxYukleniyor = false; };
+  sc.onerror = () => { wfxYukleniyor = false; };
+  document.head.appendChild(sc);
+}
+const wfxHazir = () => wfxMod && !!wfxVeri;
+// Bir efekti (W.M.D'deki gibi gecikmeli yayıcı listesi) başlatır. o.takip: izlenen mermi id'si; o.sure: sürekli
+// yayıcıların (LifeSpan −1) ne kadar yayacağı (sn); o.olcek: ek boyut çarpanı.
+function wfxCal(ad, x, y, o = {}) {
+  const tanim = wfxVeri && wfxVeri[ad];
+  if (!tanim) return false;
+  for (const d of tanim) wfxYayici.push({ d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1 });
+  return true;
+}
+const wfxRnd = () => Math.random() * 2 - 1;
+function wfxDogur(e) {
+  const d = e.d, s = WFX_OLCEK * e.olcek;
+  const E = Math.max(0.05, d.enerji * (1 + wfxRnd() * (d.enerjiS < 1 ? d.enerjiS : 0)) + (d.enerjiS >= 1 ? Math.random() * d.enerjiS : 0));
+  const hiz = Math.max(0, d.hiz + wfxRnd() * d.hizS) * s;
+  const a = d.acMax >= 360 ? Math.random() * Math.PI * 2 : -Math.PI / 2 + (Math.random() - 0.5) * d.acMax * Math.PI / 180;
+  let x = e.x, y = e.y;
+  if (d.rMax > 0 && d.sekil !== 0) { const r = (d.rMin + Math.random() * (d.rMax - d.rMin)) * s, b = Math.random() * Math.PI * 2; x += Math.cos(b) * r; y += Math.sin(b) * r; }
+  const b0 = (d.boy < 2 ? d.boy + Math.random() * d.boyS : d.boy * (1 + wfxRnd() * Math.min(0.95, d.boyS))) * s;
+  e.canli++;
+  wfxParca.push({ e, d, x, y, vx: Math.cos(a) * hiz, vy: Math.sin(a) * hiz, E, en: E, q: E / d.enerji, b0,
+    rot: Math.random() * Math.PI * 2, rr: (d.donMin + Math.random() * (d.donMax - d.donMin)) * Math.PI / 180,
+    fr: d.kare > 1 ? (Math.random() * 4) | 0 : 0, k: d.surt >= 1 ? 0 : -Math.log(Math.max(0.01, d.surt)) / E, g: d.g * s });
+}
+function wfxAdim(dt) {
+  if (!wfxYayici.length && !wfxParca.length) return;
+  for (const e of wfxYayici) {
+    e.t += dt;
+    if (e.t < 0) continue;
+    if (e.takip !== null) { const pr = projs.find(q => q.id === e.takip); if (pr) { e.x = pr.x; e.y = pr.y; } else e.sure = Math.min(e.sure, e.t); }
+    if (e.t <= e.sure + dt) {
+      const d = e.d; let n = 0;
+      if (d.oran < 0) n = e.ilk ? -d.oran : 0;                       // eksi oran: tek seferde patlama
+      else { e.acc += d.oran * (1 + wfxRnd() * (d.oranS || 0) / Math.max(1, d.oran)) * dt; n = Math.floor(e.acc); e.acc -= n; }
+      e.ilk = false;
+      n = Math.min(n, d.max - e.canli, WFX_EN_COK - wfxParca.length);
+      for (let i = 0; i < n; i++) wfxDogur(e);
+    }
+  }
+  for (const p of wfxParca) {
+    p.en -= dt;
+    if (p.en <= 0) continue;
+    p.vy += p.g * dt;
+    if (p.k) { const f = Math.exp(-p.k * dt); p.vx *= f; p.vy *= f; }
+    p.x += p.vx * dt; p.y += p.vy * dt; p.rot += p.rr * dt;
+  }
+  wfxParca = wfxParca.filter(p => { if (p.en > 0) return true; p.e.canli--; return false; });
+  wfxYayici = wfxYayici.filter(e => e.t <= e.sure + dt || e.canli > 0 || e.t < 0);
+}
+// 3 duraklı eğri: kalan enerji A'dan B'ye inerken v0 → v1, C'den D'ye inerken v1 → v2 (W.M.D First/Second*ChangeStart/End)
+function wfxEgri(en, A, B, C, D, v0, v1, v2) {
+  if (en >= A) return v0;
+  if (en > B) return v0 + (v1 - v0) * (A - en) / ((A - B) || 1);
+  if (en >= C) return v1;
+  if (en > D) return v1 + (v2 - v1) * (C - en) / ((C - D) || 1);
+  return v2;
+}
+// ---- Kodla üretilen dokular: aile başına 4 çeşit, 64 px, beyaz/gri (renk sonradan verilir) ----
+const wfxDokular = {}, wfxBoyali = new Map();
+function wfxDoku(aile, fr) {
+  const L = wfxDokular[aile] || (wfxDokular[aile] = [0, 1, 2, 3].map(i => wfxDokuCiz(aile, i)));
+  return L[fr & 3];
+}
+function wfxDokuCiz(aile, i) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const x = c.getContext('2d'), R = (a, b) => a + Math.random() * (b - a);
+  const daire = (cx, cy, r, a0, a1 = 0, renk = '255,255,255') => { const g = x.createRadialGradient(cx, cy, 0, cx, cy, r); g.addColorStop(0, `rgba(${renk},${a0})`); g.addColorStop(1, `rgba(${renk},${a1})`); x.fillStyle = g; x.beginPath(); x.arc(cx, cy, r, 0, Math.PI * 2); x.fill(); };
+  if (aile === 'cloud') {          // kıvrımlı bulut: üst üste yumuşak öbekler, üstü açık altı koyu (yukarıdan ışık)
+    for (let k = 0; k < 14; k++) { const a = R(0, 6.28), d = R(0, 15), r = R(9, 17); daire(32 + Math.cos(a) * d, 32 + Math.sin(a) * d, r, R(0.35, 0.6)); }
+    x.globalCompositeOperation = 'source-atop';
+    const g = x.createLinearGradient(0, 8, 0, 56); g.addColorStop(0, 'rgba(255,255,255,.25)'); g.addColorStop(1, 'rgba(60,60,70,.45)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  } else if (aile === 'spark') {   // yatay uzun parlak çizgi (hız yönüne döndürülür)
+    x.translate(32, 32); x.scale(1, 0.18); daire(0, 0, 30, 1); x.setTransform(1, 0, 0, 1, 0, 0); x.translate(32, 32); x.scale(1, 0.06); daire(0, 0, 26, 1);
+  } else if (aile === 'ember') {   // küçük sıcak nokta + hâle
+    daire(32, 32, 30, 0.35); daire(32, 32, 9, 1);
+  } else if (aile === 'debris') {  // düzensiz taş parçası: açık üst, koyu alt
+    x.beginPath(); const n = 7 + i; for (let k = 0; k < n; k++) { const a = k / n * 6.28, r = R(14, 26); x.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); } x.closePath();
+    const g = x.createLinearGradient(0, 8, 0, 56); g.addColorStop(0, '#fff'); g.addColorStop(1, '#8a8a8a'); x.fillStyle = g; x.fill();
+    x.strokeStyle = 'rgba(40,40,40,.6)'; x.lineWidth = 2; x.stroke();
+  } else if (aile === 'fire') {    // alev dili: aşağıda geniş, yukarı sivrilen, ortası parlak
+    for (let k = 0; k < 9; k++) { const t = k / 8; daire(32 + R(-4, 4) * (1 - t), 46 - t * 34, 16 * (1 - t * 0.75), 0.55 * (1 - t * 0.4)); }
+    daire(32, 42, 9, 0.9);
+  } else if (aile === 'flare') {   // parlama: yumuşak hâle + 4 ışın
+    daire(32, 32, 32, 0.7); daire(32, 32, 10, 1);
+    x.globalCompositeOperation = 'lighter';
+    for (const [sx, sy] of [[1, 0.05], [0.05, 1]]) { x.save(); x.translate(32, 32); x.scale(sx, sy); daire(0, 0, 31, 0.6); x.restore(); }
+  } else if (aile === 'ring') {    // şok halkası: içi boş parlak halka
+    const g = x.createRadialGradient(32, 32, 18, 32, 32, 31); g.addColorStop(0, 'rgba(255,255,255,0)'); g.addColorStop(0.6, 'rgba(255,255,255,.9)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.beginPath(); x.arc(32, 32, 31, 0, Math.PI * 2); x.fill();
+  } else if (aile === 'bubble') {  // kabarcık: ince halka + parlak nokta
+    x.strokeStyle = 'rgba(255,255,255,.85)'; x.lineWidth = 3; x.beginPath(); x.arc(32, 32, 24, 0, Math.PI * 2); x.stroke();
+    daire(32, 32, 24, 0.05, 0.25); daire(24, 22, 6, 0.9);
+  } else if (aile === 'star') {
+    daire(32, 32, 30, 0.4); x.fillStyle = '#fff'; x.beginPath(); for (let k = 0; k < 10; k++) { const a = -Math.PI / 2 + k * Math.PI / 5, r = k % 2 ? 7 : 22; x.lineTo(32 + Math.cos(a) * r, 32 + Math.sin(a) * r); } x.fill();
+  } else {                          // konfeti / toz zerresi: küçük dikdörtgen
+    x.fillStyle = '#fff'; x.fillRect(20, 26, 24, 12);
+  }
+  return c;
+}
+// Renk önbelleği: doku × çeşit × renk (kanal başına 8 seviye). Gölgeler korunur (multiply + destination-in).
+function wfxBoya(aile, fr, r, g, b) {
+  const R = r * 255 & 0xe0, G = g * 255 & 0xe0, B = b * 255 & 0xe0, key = aile + (fr & 3) + ':' + R + ',' + G + ',' + B;
+  let c = wfxBoyali.get(key);
+  if (!c) {
+    if (wfxBoyali.size > 1500) wfxBoyali.clear();
+    const kaynak = wfxDoku(aile, fr); c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d'); x.drawImage(kaynak, 0, 0);
+    x.globalCompositeOperation = 'multiply'; x.fillStyle = `rgb(${R + 16},${G + 16},${B + 16})`; x.fillRect(0, 0, 64, 64);
+    x.globalCompositeOperation = 'destination-in'; x.drawImage(kaynak, 0, 0);
+    wfxBoyali.set(key, c);
+  }
+  return c;
+}
+function wfxCiz() {
+  if (!wfxParca.length) return;
+  for (const topla of [false, true]) {
+    ctx.save(); if (topla) ctx.globalCompositeOperation = 'lighter';
+    for (const p of wfxParca) {
+      const d = p.d;
+      if (d.topla !== topla) continue;
+      const q = p.q, en = p.en;
+      const boy = p.b0 * wfxEgri(en, d.b1a * q, d.b1b * q, d.b2a * q, d.b2b * q, 1, d.boyHedef, d.boySon);
+      if (boy < 0.4) continue;
+      let al;
+      const fI = d.fIn * q, fO = d.fOut * q;
+      if (fI < p.E && en > fI) al = d.a0 + (d.a1 - d.a0) * (p.E - en) / ((p.E - fI) || 1);
+      else if (en > fO) al = d.a1;
+      else al = d.a1 + (d.a2 - d.a1) * (fO - en) / (fO || 1);
+      const r1 = d.r1a * q, r2 = d.r1b * q, r3 = d.r2a * q, r4 = d.r2b * q;
+      const ch = k => wfxEgri(en, r1, r2, r3, r4, d.c0[k], d.c1[k], d.c2[k]);
+      al *= ch(3);
+      if (al <= 0.01) continue;
+      ctx.globalAlpha = Math.min(1, al);
+      const img = wfxBoya(d.doku, p.fr, ch(0), ch(1), ch(2));
+      if (d.uzat) {   // hıza göre uzayan kıvılcım
+        const v = Math.hypot(p.vx, p.vy), L = Math.max(boy, v * 0.045 * (d.uzatK || 1));
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.vy, p.vx)); ctx.drawImage(img, -L / 2, -boy / 2, L, boy); ctx.restore();
+      } else if (p.rr) {
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.rot); ctx.drawImage(img, -boy / 2, -boy / 2, boy, boy); ctx.restore();
+      } else ctx.drawImage(img, p.x - boy / 2, p.y - boy / 2, boy, boy);
+    }
+    ctx.restore();
+  }
+  ctx.globalAlpha = 1;
+}
+// FPS sayacı (Görsel ayarlar → FPS göster): yarım saniyelik ortalama + parçacık sayısı
+let fpsGoster = false, fpsKare = 0, fpsT = 0;
+function fpsAyarOku() { try { fpsGoster = localStorage.getItem('gasmer-fps') === '1'; } catch (e) {} const el = $('fpsSayac'); if (el) el.hidden = !fpsGoster; }
+function fpsAdim(now) {
+  if (!fpsGoster) return;
+  fpsKare++;
+  if (now - fpsT >= 500) {
+    const fps = Math.round(fpsKare * 1000 / (now - fpsT)); fpsKare = 0; fpsT = now;
+    const el = $('fpsSayac'); if (el) el.textContent = `${fps} FPS · ${wfxMod ? 'W.M.D' : 'Normal'} · ${parts.length + wfxParca.length} parçacık`;
+  }
+}
+
 // Oda sahibinin fiziğinden doğan görsel olaylar (iniş, kayma, mezar düşmesi, metal kıvılcımı, delici roket tozu):
 // oda sahibi/yerel kendi ekranında çizer ve misafirlere 'vf' mesajıyla yollar (eski sürüm misafir bilmediği mesajı yok sayar).
 function vfx(k, x, y, a = 0) { vfxYap(k, x, y, a); emit({ t: 'vf', k, x: r1(x), y: r1(y), a: r2(a) }); }
@@ -3162,6 +3363,14 @@ function taslar(x, y, n, hiz, c) {
 function vfxYap(k, x, y, a) {
   if (!Number.isFinite(x) || !Number.isFinite(y)) return;
   a = Number.isFinite(a) ? clamp(a, -6.3, 6.3) : 0;
+  if (wfxHazir()) {
+    if (k === 'inis') wfxCal(a > 0.4 ? 'landlarge' : 'landsmall', x, y);
+    else if (k === 'kayma') wfxCal('skid', x, y, { sure: 0.4 });
+    else if (k === 'metal') wfxCal('smallsparks', x, y, { sure: 0.05 });
+    else if (k === 'delgi') { wfxCal('dustusa', x, y); wfxCal('debrisusa', x, y); }
+    else if (k === 'mezar') { wfxCal('landsmall', x, y); Sound.play('agirDemir'); shake = Math.min(12, shake + 1.5 + a * 2); buzz(30); }
+    return;
+  }
   if (k === 'inis') { tozBulut(x, y, Math.round(4 + a * 6), 50 + a * 70, 0, 0.8 + a * 0.5); if (a > 0.35) taslar(x, y, Math.round(a * 8), 160); }
   else if (k === 'kayma') {   // a: yön × şiddet; toz hareketin arkasına ve yere yakın savrulur
     const yon = Math.sign(a) || 1, s = Math.min(1, Math.abs(a));
@@ -3200,12 +3409,23 @@ function magaraTozu(x, y, r) {
 // Bazuka (ve roket ailesi) namlusu: kısa parlama + ileri doğru dağılan duman
 function namluFx(u) {
   if (!u) return;
+  if (wfxHazir()) { const dx = Math.cos(u.aim) * u.facing, dy = Math.sin(u.aim); wfxCal('muzzlesmoke', u.x + dx * 26, u.y - AIM_Y + dy * 26, { sure: 1.2 }); return; }
   const dx = Math.cos(u.aim) * u.facing, dy = Math.sin(u.aim), x = u.x + dx * 26, y = u.y - AIM_Y + dy * 26;
   parts.push({ kind: 'parlama', x, y, size: 20, life: 0.13, max: 0.13, vx: 0, vy: 0, g: 0 });
   for (let i = 0; i < 7; i++) { const v = rnd(40, 160); parts.push({ kind: 'duman', x, y, vx: dx * v + rnd(-25, 25), vy: dy * v + rnd(-25, 15) - 10, g: -20, surt: 3, size: rnd(3, 5), buyu: 2.4, life: rnd(0.5, 0.9), max: 0.9, soluk: 0.5 }); }
 }
 const NAMLU_SILAH = new Set(['bazooka', 'drill', 'guided', 'rduck']);
 function vfxPatlama(x, y, r) {
+  if (wfxHazir()) {   // W.M.D testi: patlama + krater dumanı + kenarda alev + mağara tozu W.M.D yayıcılarıyla
+    wfxCal(r >= 64 ? 'dynamiteexplosion' : r >= 55 ? 'largeexplosion' : r >= 35 ? 'mediumexplosion' : 'smallexplosion', x, y);
+    wfxCal(r >= 55 ? 'largesmoke' : r >= 35 ? 'mediumsmoke' : 'smallsmoke', x, y + r * 0.35, { sure: 5 });
+    if (r >= 28) for (let k = 0, dene = 0; k < (r >= 40 ? 3 : 2) && dene < 16; dene++) {
+      const a = rnd(0.15, Math.PI - 0.15);
+      for (let dd = r; dd < r + 16; dd += 2) { const px = x + Math.cos(a) * dd, py = y + Math.sin(a) * dd; if (isSolid(px, py)) { if (!isSolid(px, py - 4)) { wfxCal('fire', px, py - 1, { sure: rnd(2.2, 4) }); k++; } break; } }
+    }
+    for (let k = -2; k <= 2; k++) { const px = x + k * r * 0.4; for (let py = y - r - 4; py > y - r - 90 && py > 0; py -= 3) if (isSolid(px, py)) { wfxCal(r >= 55 ? 'mediumfallingdust' : 'smallfallingdust', px, py + 3, { sure: 1 }); k = 3; break; } }
+    return;
+  }
   const s = clamp(r / 42, 0.35, 1.8);   // bazuka = 1
   parts.push({ kind: 'parlama', x, y, size: r * 2.2, life: 0.3, max: 0.3, vx: 0, vy: 0, g: 0 });
   parts.push({ kind: 'halka', x, y, size: r * 2.1, life: 0.38, max: 0.38, vx: 0, vy: 0, g: 0 });
@@ -3310,6 +3530,7 @@ function portalFx(x, y, i) {
 const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 // Portal geçişi (W.M.D TeleportIn/Out): saçılan kıvılcım + portal renginde şok halkası + yukarı akan parıltı
 function portalGecisFx(x, y, i) {
+  if (wfxHazir()) { wfxCal('teleportin', x, y); return; }
   const c = PORTAL_COLORS[i] || PORTAL_COLORS[0];
   for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, sp = 30 + Math.random() * 90; parts.push({ kind: 'spark', c, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 0, size: 2 + Math.random() * 2, life: 0.5, max: 0.5 }); }
   parts.push({ kind: 'halka', c: hexRgb(c), x, y, size: 46, life: 0.45, max: 0.45, vx: 0, vy: 0, g: 0 });
@@ -3318,6 +3539,7 @@ function portalGecisFx(x, y, i) {
 // Sıra başlangıcı: sırası gelen askerin etrafında takım renginde iki halka ve kısa parıltı
 function siraFx(u) {
   if (!u || !u.alive || !u.team) return;
+  if (wfxHazir()) { wfxCal('spawn', u.x, u.y - UNIT_H / 2); return; }
   const c = hexRgb(u.team.c || '#ffffff'), y = u.y - UNIT_H / 2;
   parts.push({ kind: 'halka', c, x: u.x, y, size: 44, life: 0.55, max: 0.55, vx: 0, vy: 0, g: 0 });
   parts.push({ kind: 'halka', c, x: u.x, y, size: 30, life: 0.4, max: 0.4, vx: 0, vy: 0, g: 0 });
@@ -5186,6 +5408,7 @@ function drawUnit(u, isActive, t) {
 
 // Pet şişe roketin kapağından çıkan duman (alev yok)
 function rocketSmoke(p) {
+  if (wfxHazir()) { if (!p._wfx) { p._wfx = true; wfxCal('bazookatrail', p.x, p.y, { takip: p.id, sure: 30 }); } return; }
   const simdi = performance.now();
   if (!p._hz) p._hz = simdi;
   else if (simdi - p._hz > 1000) { p._hz = simdi; parts.push({ kind: 'rhalka', x: p.x, y: p.y, vx: 0, vy: -8, g: 0, size: 22, life: 0.9, max: 0.9 }); }
@@ -5363,6 +5586,7 @@ function drawParticles() {
     }
   }
   ctx.restore();
+  wfxCiz();   // W.M.D testi parçacıkları
   for (const p of parts) {
     const a = Math.max(0, p.life / p.max);
     if (p.kind === 'flash') { ctx.fillStyle = `rgba(255,240,200,${a})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size * (1.2 - a * 0.4), 0, Math.PI * 2); ctx.fill(); }
@@ -5549,7 +5773,7 @@ function updateFx(dt) {
     const a = Math.random() * 6.28, r = 90 + Math.random() * 70;
     parts.push({ kind: 'spark', c: Math.random() < 0.5 ? '#3fe0b0' : '#e6fff6', x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r, vx: -Math.cos(a) * r * 1.8, vy: -Math.sin(a) * r * 1.8, g: 0, size: 1.5 + Math.random() * 1.5, life: 0.5, max: 0.5 });
   }
-  vfxAdim(dt); zerreAdim(dt); fitilAdim(dt);
+  vfxAdim(dt); zerreAdim(dt); fitilAdim(dt); wfxAdim(dt);
   if (state === 'aim' && !kaosTur && active && active.alive) { if (active !== siraSon) { siraSon = active; siraFx(active); } }
   else if (state !== 'aim' && state !== 'fly' && state !== 'settle') siraSon = null;
   for (const p of parts) {
@@ -6098,7 +6322,8 @@ addEventListener('blur', () => { for (const k in KEYS) act('k', { k, v: false })
 
 // ---- Menü ----
 function showView(id) {
-  for (const v of ['vHome', 'vJoin', 'vLobby', 'vLocal', 'vStats', 'vNotlar']) $(v).hidden = v !== id;
+  for (const v of ['vHome', 'vJoin', 'vLobby', 'vLocal', 'vStats', 'vNotlar', 'vGorsel']) $(v).hidden = v !== id;
+  if (id === 'vGorsel') gorselCiz();
   if (id === 'vStats') istatistikCiz();
   if (id === 'vNotlar') notlarCiz();
   $('nameField').hidden = !(id === 'vHome' || id === 'vJoin');
@@ -6318,13 +6543,24 @@ $('leaveBtn').addEventListener('click', leaveRoom);
 // Menüdeki geri ok: bulunulan ekrana göre bir önceki ekrana
 $('statsBtn').addEventListener('click', () => showView('vStats'));
 $('notlarBtn').addEventListener('click', () => showView('vNotlar'));
+$('gorselBtn').addEventListener('click', () => showView('vGorsel'));
+function gorselCiz() {
+  $('efNormal').setAttribute('aria-pressed', String(!wfxMod)); $('efWmd').setAttribute('aria-pressed', String(wfxMod));
+  $('fpsKapali').setAttribute('aria-pressed', String(!fpsGoster)); $('fpsAcik').setAttribute('aria-pressed', String(fpsGoster));
+}
+const ayarYaz = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
+$('efNormal').addEventListener('click', () => { ayarYaz('gasmer-efekt', 'normal'); if (/[?&]wmdfx/.test(location.search)) history.replaceState(null, '', location.pathname); wfxAyarOku(); gorselCiz(); });
+$('efWmd').addEventListener('click', () => { ayarYaz('gasmer-efekt', 'wmd'); wfxAyarOku(); gorselCiz(); });
+$('fpsKapali').addEventListener('click', () => { ayarYaz('gasmer-fps', '0'); fpsAyarOku(); gorselCiz(); });
+$('fpsAcik').addEventListener('click', () => { ayarYaz('gasmer-fps', '1'); fpsAyarOku(); gorselCiz(); });
+wfxAyarOku(); fpsAyarOku();
 $('statsReset').addEventListener('click', () => {
   if (!maclariOku().length || !confirm('Bu telefondaki bütün maç kayıtları silinsin mi?')) return;
   try { localStorage.removeItem(MAC_ANAHTAR); } catch (e) {} istatistikCiz();
 });
 $('backBtn').addEventListener('click', () => {
   if (!$('vJoin').hidden) $('joinBack').click();
-  else if (!$('vLocal').hidden || !$('vStats').hidden || !$('vNotlar').hidden) showView('vHome');
+  else if (!$('vLocal').hidden || !$('vStats').hidden || !$('vNotlar').hidden || !$('vGorsel').hidden) showView('vHome');
   else if (!$('vLobby').hidden) {
     if (mode === 'host' && players.length > 1 && !confirm('Oda kapanacak, herkes çıkacak. Ana ekrana dönülsün mü?')) return;
     leaveRoom();
@@ -6424,7 +6660,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 
 // Otomatik testler için iç duruma erişim; sadece adres ?test ile açılınca
 if (new URLSearchParams(location.search).has('test')) window.__t = {
-  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
+  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wfxParca() { return wfxParca; }, get wfxHazir() { return wfxHazir(); }, wfxCal, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
@@ -6469,7 +6705,7 @@ function frame(now) {
     // Host saniyede ~30 kez bakar; değişen bir şey varsa yollar, hiçbir şey kıpırdamıyorsa saniyede 4 kez
     if (mode === 'host' && inGame && state !== 'menu' && now - snapBakildi >= 33) { snapBakildi = now; snapGonder(now); }
   }
-  updateFx(dt); adimSesi(dt);
+  updateFx(dt); adimSesi(dt); fpsAdim(now);
   if (aktifHarita === 'hurda' && inGameState()) kabloZamani();
   if (terr) updateCam();
   render(now / 1000);
