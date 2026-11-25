@@ -449,10 +449,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
           <div class="seg"><button id="ls2" aria-pressed="false">2</button><button id="ls3" aria-pressed="true">3</button><button id="ls4" aria-pressed="false">4</button></div>
         </div>
         <div class="field">
-          <span class="flabel">Harita</span>
-          <div class="seg"><button id="lhPlastik" aria-pressed="true">Plastik Evrim</button><button id="lhHurda" aria-pressed="false">Hurda Gezegeni</button></div>
-        </div>
-        <div class="field">
           <span class="flabel">Başlangıç</span>
           <div class="seg"><button id="lyRast" aria-pressed="true">Rastgele</button><button id="lyNomad" aria-pressed="false">Nomad</button></div>
         </div>
@@ -511,10 +507,6 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
         <div class="field">
           <span class="flabel">Tim başına asker</span>
           <div class="seg"><button id="s2" aria-pressed="false">2</button><button id="s3" aria-pressed="true">3</button><button id="s4" aria-pressed="false">4</button></div>
-        </div>
-        <div class="field">
-          <span class="flabel">Harita</span>
-          <div class="seg"><button id="hPlastik" aria-pressed="true">Plastik Evrim</button><button id="hHurda" aria-pressed="false">Hurda Gezegeni</button></div>
         </div>
         <div class="field">
           <span class="flabel">Başlangıç</span>
@@ -653,7 +645,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v27-';
+const ID_PREFIX = 'gasmerler-v28-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -674,11 +666,11 @@ let digLeft = DIG_MAX, digging = false, digAcc = 0, digMark = 0, bubbles = [];
 let airTarget = null, shotThisTurn = false, settleAll = 0, camHold = null;
 const cam = { x: W / 2, y: H / 2, z: 1, user: 1, free: false };
 let input = { left: false, right: false, up: false, down: false, charging: false, power: 0, jet: false };
-const config = { teams: 2, size: 3, harita: 'plastik', yer: 'rastgele', names: TEAM_COLORS.map(t => t.name) };
+const config = { teams: 2, size: 3, harita: 'hurda', yer: 'rastgele', names: TEAM_COLORS.map(t => t.name) };
 
 // ---- Ağ durumu ----
 // 'local': tek telefon. 'host': oyunu yöneten telefon, fizik burada döner. 'client': hamlesini hosta yollar, görüntüyü ondan alır.
-let mode = 'local', peer = null, hostConn = null, mySlot = 0, players = [], lobbySize = 3, lobbyMode = 'ffa', lobbyTeams = 2, lobbyHarita = 'plastik', lobbyYer = 'rastgele', inGame = false, roomCode = '', lastInit = null, nmTimer = 0;
+let mode = 'local', peer = null, hostConn = null, mySlot = 0, players = [], lobbySize = 3, lobbyMode = 'ffa', lobbyTeams = 2, lobbyHarita = 'hurda', lobbyYer = 'rastgele', inGame = false, roomCode = '', lastInit = null, nmTimer = 0;
 let joinTimer = 0, pingTimer = 0, wnTimer = 0, joined = false, lastSnapSent = 0, lastSnapAt = 0, lastAimSent = 0, aimHoldUntil = 0, warnedStale = false, fxTick = 0;
 let myWorms = ['', '', '', ''];
 
@@ -1002,10 +994,11 @@ function buzz(ms) {
 }
 
 
-// ---- Harita teması: Plastik Evrim Gezegeni ----
+// ---- Varsayılan tema değerleri (Hurda Gezegeni kendi değerleriyle üzerine yazar: harita-hurda-gezegeni.js tema) ----
 // Arazi şekli her maç aynı tohumla rastgele üretilir; tema sadece görünümü belirler.
-const HARITALAR = ['plastik', 'hurda'];   // 'plastik': kodla üretilen rastgele harita, 'hurda': Photoshop katmanlı sabit harita
-let aktifHarita = 'plastik', haritaDuvar = false, haritaAyna = false;   // haritaAyna: Hurda Gezegeni yatayda ters (tohuma göre rastgele)
+// v28: Plastik Evrim haritası kaldırıldı (kullanıcı kararı); tek harita Hurda Gezegeni (katmanlı PNG, gömülü maske)
+const HARITALAR = ['hurda'];
+let aktifHarita = 'hurda', haritaDuvar = false, haritaAyna = false;   // haritaAyna: Hurda Gezegeni yatayda ters (tohuma göre rastgele)
 const TEMA = {
   ad: 'Plastik Evrim Gezegeni',
   gok: ['#1e2433', '#4a3f5c', '#c9a25e'],          // gökyüzü: üst, orta, ufuk
@@ -1020,7 +1013,7 @@ const TEMA = {
   toz: ['#7fd3bf', '#c97a9a', '#e0c36a', '#8fa7c9', '#d9d2c4'], // saçılan parçacıklar
   su: 'rgba(44,68,58,.94)', suCizgi: 'rgba(176,222,150,.65)',
 };
-const TEMA_PLASTIK = { ...TEMA };
+const TEMA_PLASTIK = { ...TEMA };   // (ad tarihî) varsayılan tema değerlerinin kopyası
 
 // ---- Arazi ----
 function isSolid(x, y) { x |= 0; y |= 0; if (x < 0 || x >= W || y < 0 || y >= H) return false; return solid[y * W + x] === 1 || (graves.length > 0 && mezarIci(x, y, null)) || (barikatlar.length > 0 && barikatIci(x, y)); }
@@ -1060,83 +1053,12 @@ function barikatIci(x, y) { for (const b of barikatlar) if (barikatUzak(b, x, y)
 const araziKati = (x, y) => { x |= 0; y |= 0; return x >= 0 && x < W && y >= 0 && y < H && solid[y * W + x] === 1; };
 
 function genTerrain() {
-  Object.assign(TEMA, TEMA_PLASTIK); haritaDuvar = false;
-  if (aktifHarita === 'hurda') {
-    solid = new Uint8Array(W * H);
-    HARITA_HURDA_PNG.uret(solid, haritaAyna);                       // gömülü maske: her telefonda aynı
-    ({ terr, tctx } = HARITA_HURDA_PNG.arazi(haritaAyna));       // tuvale dünya koordinatlarıyla çizilir
-    haritaDuvar = true;
-    Object.assign(TEMA, HARITA_HURDA_PNG.tema);
-    return;
-  }
+  Object.assign(TEMA, TEMA_PLASTIK);   // varsayılan tema değerleri; Hurda kendi değerleriyle üzerine yazar
   solid = new Uint8Array(W * H);
-  const p = [rng() * 6.28, rng() * 6.28, rng() * 6.28, rng() * 6.28];
-  const heights = new Float32Array(W);
-  for (let x = 0; x < W; x++) {
-    let h = H * 0.58 + Math.sin(x * 0.0028 + p[0]) * 95 + Math.sin(x * 0.0072 + p[1]) * 42 + Math.sin(x * 0.016 + p[2]) * 17 + Math.sin(x * 0.037 + p[3]) * 6;
-    const e = Math.min(1, x / 140, (W - 1 - x) / 140), s = e * e * (3 - 2 * e);
-    h = clamp(h * s + (H + 40) * (1 - s), 180, H + 40);
-    heights[x] = h;
-    for (let y = Math.ceil(h); y < H; y++) solid[y * W + x] = 1;
-  }
-  // Havada asılı adacıklar
-  for (let i = 0; i < 2; i++) {
-    const cx = 280 + rng() * (W - 560), cy = heights[cx | 0] - 150 - rng() * 50, rx = 55 + rng() * 45, ry = 17 + rng() * 8;
-    for (let y = Math.floor(cy - ry); y <= cy + ry * 1.8; y++) for (let x = Math.floor(cx - rx); x <= cx + rx; x++) {
-      const dx = (x - cx) / rx, dy = (y - cy) / (y < cy ? ry : ry * 1.8);
-      if (dx * dx + dy * dy <= 1 && x >= 0 && x < W && y >= 0 && y < H) solid[y * W + x] = 1;
-    }
-  }
-  // Mağaralar
-  for (let i = 0; i < 3; i++) {
-    const cx = 160 + rng() * (W - 320), cy = heights[cx | 0] + 65 + rng() * 90, r = 26 + rng() * 22;
-    if (cy < WATER - 40) carveSolid(cx, cy, r * 1.5, r);
-  }
-  // Doku: sıkışmış plastik katmanları, üstte plastik film kabuğu
-  terr = document.createElement('canvas'); terr.width = W; terr.height = H;
-  tctx = terr.getContext('2d');
-  const img = tctx.createImageData(W, H), d = img.data, K = TEMA.katmanlar;
-  for (let x = 0; x < W; x++) {
-    let depth = 0;
-    for (let y = 0; y < H; y++) {
-      const i = y * W + x;
-      if (!solid[i]) { depth = 0; continue; }
-      depth++;
-      let c;
-      const n = hash2(x >> 2, y >> 2);
-      if (depth <= 4) c = TEMA.kabuk.map(v => v + n * 14);
-      else if (depth <= 9) c = TEMA.kabukAlt.map(v => v + n * 10);
-      else {
-        const yy = y + Math.sin(x * 0.011) * 10 + Math.sin(x * 0.037) * 3;
-        const bi = Math.floor(yy / 15), edge = yy - bi * 15;
-        const base = hash2(bi, 7) < 0.45 ? TEMA.zemin : K[Math.floor(hash2(bi, 3) * K.length)];
-        const sh = 0.9 + n * 0.12 - Math.min(0.2, depth / 2500);
-        c = base.map(v => v * sh);
-        if (edge < 1.6) c = c.map(v => v * 0.62);
-      }
-      const k = i * 4; d[k] = c[0]; d[k + 1] = c[1]; d[k + 2] = c[2]; d[k + 3] = 255;
-    }
-  }
-  tctx.putImageData(img, 0, 0);
-  // Gömülü şişe kapakları ve plastik kırıkları (sadece toprağın içine boyanır)
-  tctx.save(); tctx.globalCompositeOperation = 'source-atop';
-  for (let gy = 0; gy < H; gy += 34) for (let gx = 0; gx < W; gx += 34) {
-    const h1 = hash2(gx * 3 + 11, gy * 5 + 17);
-    if (h1 > 0.3) continue;
-    const x = gx + hash2(gx, gy + 1) * 30, y = gy + hash2(gx + 1, gy) * 30;
-    if (!isSolid(x, y) || !isSolid(x, y - 14) || !isSolid(x, y + 6)) continue;
-    const col = TEMA.kapaklar[Math.floor(hash2(gx + 5, gy + 9) * TEMA.kapaklar.length)];
-    tctx.fillStyle = col; tctx.strokeStyle = 'rgba(20,12,18,.85)'; tctx.lineWidth = 1.2;
-    if (h1 < 0.18) {      // kapak
-      const r = 2.6 + hash2(gx + 2, gy + 3) * 1.8;
-      tctx.beginPath(); tctx.arc(x, y, r, 0, Math.PI * 2); tctx.fill(); tctx.stroke();
-    } else {              // kırık parça
-      const a = hash2(gx + 7, gy + 2) * Math.PI, L = 4 + hash2(gx, gy + 7) * 5;
-      tctx.save(); tctx.translate(x, y); tctx.rotate(a);
-      tctx.fillRect(-L / 2, -1.3, L, 2.6); tctx.strokeRect(-L / 2, -1.3, L, 2.6); tctx.restore();
-    }
-  }
-  tctx.restore();
+  HARITA_HURDA_PNG.uret(solid, haritaAyna);                       // gömülü maske: her telefonda aynı
+  ({ terr, tctx } = HARITA_HURDA_PNG.arazi(haritaAyna));       // tuvale dünya koordinatlarıyla çizilir
+  haritaDuvar = true;
+  Object.assign(TEMA, HARITA_HURDA_PNG.tema);
 }
 
 function carveSolid(cx, cy, rx, ry) {
@@ -1341,7 +1263,7 @@ function stepBlackHole(p) {
   if (p.fuse <= 0) {
     p.dead = true;
     portals = portals.filter(P => { const [px, py] = portalCenter(P); return Math.hypot(px - p.x, py - p.y) > p.r + 10; });
-    explode(p.x, p.y, p.r, p.dmg);
+    explode(p.x, p.y, p.r, p.dmg, 1, undefined, { karadelik: true });
     // Yörüngedeki taşlar her yöne saçılır; çarptıkları askere hasar verir
     for (let k = 0; k < 7; k++) {
       const a = k / 7 * Math.PI * 2 + rng() * 0.6, sp = 280 + rng() * 200;
@@ -1359,9 +1281,9 @@ function myTurn() { if (mode === 'local') return true; const t = team(); return 
 // Hurda Gezegeni resimleri henüz yüklenmediyse önce yükle, sonra başlat
 function haritaIleBaslat(opts, sonra) {
   const go = () => { startGame(opts); if (sonra) sonra(); };
-  if (opts.harita === 'hurda' && !HARITA_HURDA_PNG.hazir) {
+  if (!HARITA_HURDA_PNG.hazir) {
     toast('Harita yükleniyor…');
-    HARITA_HURDA_PNG.yukle().then(go, () => { toast('Hurda Gezegeni yüklenemedi, Plastik Evrim açılıyor'); opts.harita = 'plastik'; go(); });
+    HARITA_HURDA_PNG.yukle().then(go, () => HARITA_HURDA_PNG.yukle().then(go, () => toast('Harita yüklenemedi. İnternet bağlantını kontrol edip tekrar dene.')));
   } else go();
 }
 
@@ -1369,13 +1291,13 @@ let macId = 0, kayitliMac = 0;
 function startGame(opts) {
   macId = opts.seed >>> 0;
   rng = mulberry32(opts.seed >>> 0);
-  aktifHarita = opts.harita === 'hurda' ? 'hurda' : 'plastik';
-  haritaAyna = aktifHarita === 'hurda' && ((Math.imul(opts.seed >>> 0, 2654435761) >>> 16) & 1) === 1;
-  W = aktifHarita === 'hurda' ? HARITA_HURDA_PNG.W : opts.teams.length > 4 ? 1900 : 1500;   // Hurda Gezegeni hep 1900; Plastik Evrim 5-6 oyuncuda genişler
+  aktifHarita = 'hurda';
+  haritaAyna = ((Math.imul(opts.seed >>> 0, 2654435761) >>> 16) & 1) === 1;   // tohuma göre yatayda ters
+  W = HARITA_HURDA_PNG.W;
   genTerrain();
   mapTop = 0; while (mapTop < WATER - 100 && !solid.subarray(mapTop * W, mapTop * W + W).includes(1)) mapTop++;
   mapTop -= 40;
-  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; yayicilar = []; zerreler = []; wfxYayici = []; wfxParca = []; kokular = []; kapanlar = []; barikatlar = []; yapiskanlar = [];
+  teams = []; units = []; projs = []; parts = []; pops = []; graves = []; crates = []; portals = []; bubbles = []; carveLog = []; pid = 0; yayicilar = []; zerreler = []; wfxYayici = []; wfxParca = []; wfxJetler.clear(); siraSon = null; kokular = []; kapanlar = []; barikatlar = []; yapiskanlar = [];
   turSay = 0; olaySil(); imkansizTur = -1; atanU = null; kaosIlan = false; kaosTur = false; kaos = null; dudukler = []; kaosOldu = false; $('perde').hidden = true; sakinTur = 0; hasarVar = false; asitDurum = null; cizirtilar = [];
   active = null; winnerIdx = -1; portalPending = 0; portalReturn = false; ffTurn = 0; moveLeft = MOVE_MAX;
   airTarget = null; shotThisTurn = false; camHold = null;
@@ -1721,6 +1643,14 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['28', '25 Kasım 2026', [
+    ['k', 'Plastik Evrim haritası kaldırıldı: oyun artık yalnız Hurda Gezegeni haritasında oynanır (harita seçimi kalktı)'],
+    ['d', 'Portaldan geçişte eski parıltı ve renkli halka; W.M.D ışınlanma efekti yalnız kara delik patladığında çıkar'],
+  ]],
+  ['27.5', '25 Kasım 2026', [
+    ['y', 'Sprey Jet uçarken Worms W.M.D jetpack alevi: itki verirken aşağı fışkıran alev, duman ve korlar; süzülürken küçük alev'],
+    ['d', 'Sıra değişince ve asker değiştirince askerin etrafında çıkan takım renginde halka geri geldi'],
+  ]],
   ['27.4', '25 Kasım 2026', [
     ['d', 'Efektler artık herkes için Worms W.M.D ayarlarıyla: patlama, duman, alev, toz, kıvılcım, roket izi, portal (Görsel ayarlarda yalnız FPS göstergesi kaldı)'],
     ['k', 'Sırası gelen askerin etrafında çıkan halka ve parıltı efekti kaldırıldı'],
@@ -2496,35 +2426,8 @@ function drawZaplar() {
 function hx(x) { return haritaAyna ? W - x : x; }
 // Altın sandığın rafı: kolonla kapalı kuytu; maç başında orada kimse başlamaz
 function altinRafi(x, y) { const gx = haritaAyna ? W - x : x; return gx > 330 && gx < 535 && y > 440 && y < 545; }
-function buryGoldCrates() {
-  // Hurda Gezegeni: altın sandık büyük kemerin altındaki, sarkıtların arasındaki kuytu rafta durur (haritanın en zor yeri)
-  if (aktifHarita === 'hurda') return [];   // Hurda'da gömülü altın sandık yok, Hele İki Gözüm düşen sandıktan çıkar
-  const out = [], RX = 30, RY = 24;
-  const enclosed = (x, y, min) => {   // oyuğun çevresindeki halkanın neredeyse tamamı toprak olmalı (mağaraya denk gelmesin)
-    let n = 0;
-    for (let i = 0; i < 24; i++) { const a = i / 24 * Math.PI * 2; if (isSolid(x + Math.cos(a) * (RX + 22), y + Math.sin(a) * (RY + 22))) n++; }
-    return n >= min;
-  };
-  // Önce haritanın sol ve sağ yarısında ara; bir yarıda yer yoksa haritanın kalanında, diğer sandıktan uzakta ara.
-  // Sabit çizilmiş haritalarda uygun yer az olabilir: son aramada sandıklar birbirine biraz yakın, biraz sığ olabilir
-  // [aralık başı, sonu, sandıklar arası en az mesafe (W oranı), en az derinlik, halkada en az toprak (24'te)]
-  for (const [lo, hi, gap, dmin, ring] of [[0.18, 0.42, 0.25, 110, 23], [0.58, 0.82, 0.25, 110, 23], [0.08, 0.92, 0.25, 110, 23], [0.05, 0.95, 0.12, 80, 22]]) {
-    if (out.length >= 2) break;
-    for (let tries = 0; tries < 200; tries++) {
-      const x = Math.round(W * (lo + rng() * (hi - lo))), top = surfaceY(x);
-      if (top === null || out.some(o => Math.abs(o.x - x) < W * gap)) continue;
-      const y = Math.round(top + dmin + rng() * 90);
-      if (y > WATER - RY - 50 || !enclosed(x, y, ring)) continue;
-      carveSolid(x, y, RX, RY);
-      tctx.save(); tctx.globalCompositeOperation = 'source-atop'; tctx.fillStyle = TEMA.oyuk;
-      tctx.beginPath(); tctx.ellipse(x, y, RX + 6, RY + 6, 0, 0, Math.PI * 2); tctx.fill();
-      tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000'; tctx.beginPath(); tctx.ellipse(x, y, RX, RY, 0, 0, Math.PI * 2); tctx.fill(); tctx.restore();
-      out.push({ x, y: y + RY - 1 });   // sandık oyuğun tabanında durur
-      break;
-    }
-  }
-  return out;
-}
+// Gömülü altın sandık yalnız Plastik Evrim'deydi (v28'de harita kaldırıldı); Hurda'da Hele İki Gözüm düşen sandıktan çıkar
+function buryGoldCrates() { return []; }
 
 // Bütün sandıklar soru işaretli; içinden ne çıkacağı ancak alınınca belli olur
 // Bir noktadaki toprak ana araziye bağlı mı: topraktan toprağa ilerleyerek su seviyesine inilebiliyorsa bağlıdır.
@@ -2576,10 +2479,9 @@ function stepCrates() {
 }
 // Sandık içeriği: iyi (can, özel silah, kalkan, kürek) ya da kötü (tuzak bomba, link)
 // Ağırlıklar doğrudan yüzde (toplam 100). En nadir eşya düdük
-const CRATE_LOOT = [['hp', 13], ['weapon', 15], ['shield', 9], ['bos', 9], ['shovel', 6], ['trap', 7], ['link', 7], ['jet', 12], ['tape', 12], ['revive', 10]];
 // Hurda Gezegeni'nde gömülü altın sandık yok: Hele İki Gözüm %3 ihtimalle düşen sandıktan çıkar (candan ve silahtan alındı)
 const CRATE_LOOT_HURDA = [['hp', 11.5], ['weapon', 13.5], ['shield', 9], ['bos', 9], ['shovel', 6], ['trap', 7], ['link', 7], ['jet', 12], ['tape', 12], ['revive', 10], ['airstrike', 3]];
-const lootTablosu = () => aktifHarita === 'hurda' ? CRATE_LOOT_HURDA : CRATE_LOOT;
+const lootTablosu = () => CRATE_LOOT_HURDA;
 let zorlaLoot = null, kokular = [];
 function kokuFx(x, y) { kokular.push({ x, y, t: 0 }); Sound.sample('fart'); }
 const ESYA_LOOT = { jet: ['Sprey Jet', '#8fd3ff'], tape: ['Koli Bandı', '#d9b86a'], revive: ['Diriltme', '#9fe8ff'], airstrike: ['Hele İki Gözüm', '#ffcb3d'] };
@@ -3056,9 +2958,10 @@ function endDig(t) {
 // ses: patlama sesi (yoksa büyüklüğe göre küçük/büyük)
 // kaynak: patlayan mermi (isteğe bağlı): kimin attığını ve portaldan geçip geçmediğini taşır
 function explode(x, y, r, dmg, kb = 1, ses, kaynak) {
-  explodeFx(x, y, r, ses);
+  const kd = !!(kaynak && kaynak.karadelik);   // kara delik patlaması: ek görsel efekt
+  explodeFx(x, y, r, ses, kd);
   if (mode === 'host') carveLog.push([r1(x), r1(y), r, 1]);   // 4. alan 1 = patlama krateri (sonradan katılana da kenarıyla çizilir)
-  emit({ t: 'x', x: r1(x), y: r1(y), r, s: ses });
+  emit(kd ? { t: 'x', x: r1(x), y: r1(y), r, s: ses, kd: 1 } : { t: 'x', x: r1(x), y: r1(y), r, s: ses });
   const onceki = atanU, atan = kaynak && kaynak.atan >= 0 ? units[kaynak.atan] : null;
   if (atan) atanU = atan;
   for (const u of units) {
@@ -3112,19 +3015,20 @@ function imkansizAtis(t) {
 // Görsel/işitsel efektler: hem host hem client kendi ekranında oynatır
 // Atış sırasında son vuruş yeri: tur bitince kamera burada bekler
 function holdCam(x, y) { if (state === 'fly' || state === 'settle') camHold = { x, y }; }
-function explodeFx(x, y, r, ses) {
+function explodeFx(x, y, r, ses, kd) {
   holdCam(x, y); roketSus();
   carve(x, y, r, true);
   shake = Math.min(12, shake + r * 0.18);
   Sound.sample(ses || (r <= 32 ? 'kucuk' : 'buyuk')) || Sound.play('boom', r); buzz(r > 35 ? 70 : 40);
   vfxPatlama(x, y, r);
+  if (kd && wfxHazir()) wfxCal('teleportin', x, y);   // kara delik patlarken W.M.D ışınlanma parıltısı (yalnız burada)
 }
 
 // ---- Görsel efektler (VFX): W.M.D'nin PFX_MediumExplosion tarifinden uyarlandı. Yalnız görsel, her telefon kendi
 // ekranında rastgele üretir (ağdan gitmez). Katmanlar: parlama + şok halkası (kısa, toplamsal) → ateş topları →
 // ağır kıvılcım çizgileri ve toprak parçaları → yükselip büyüyen, koyudan açığa dönen duman → kalıcı krater dumanı,
 // korlar ve kenarda yanan küçük alevler. Parçacık sayısı patlama boyuna göre ölçeklenir ve parts 700 ile sınırlı.
-let yayicilar = [];   // v27.4: sıra başlangıcı efekti kullanıcı isteğiyle kaldırıldı
+let yayicilar = [], siraSon = null;
 // Fitil kıvılcımı: dinamit ve el bombasının fitilinden sürekli kıvılcım; son 1,5 sn'de hızlanır (yalnız görsel)
 function fitilAdim(dt) {
   for (const p of projs) {
@@ -3193,22 +3097,33 @@ const wfxHazir = () => wfxMod && !!wfxVeri;
 function wfxCal(ad, x, y, o = {}) {
   const tanim = wfxVeri && wfxVeri[ad];
   if (!tanim) return false;
-  for (const d of tanim) wfxYayici.push({ d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1 });
-  return true;
+  const grup = [];
+  for (const d of tanim) { const e = { d, x, y, t: -(d.gec || 0), acc: 0, canli: 0, ilk: true, takip: o.takip ?? null, takipU: o.takipU ?? null, sure: d.omurE < 0 ? (o.sure ?? 2) : d.omurE, olcek: o.olcek || 1 }; wfxYayici.push(e); grup.push(e); }
+  return grup;
 }
 const wfxRnd = () => Math.random() * 2 - 1;
 function wfxDogur(e) {
   const d = e.d, s = WFX_OLCEK * e.olcek;
   const E = Math.max(0.05, d.enerji * (1 + wfxRnd() * (d.enerjiS < 1 ? d.enerjiS : 0)) + (d.enerjiS >= 1 ? Math.random() * d.enerjiS : 0));
-  const hiz = Math.max(0, d.hiz + wfxRnd() * d.hizS) * s;
+  const hiz = (d.hiz + wfxRnd() * d.hizS) * s;   // eksi hız: koninin tersine (W.M.D jetpack alevi aşağı)
   const a = d.acMax >= 360 ? Math.random() * Math.PI * 2 : -Math.PI / 2 + (Math.random() - 0.5) * d.acMax * Math.PI / 180;
   let x = e.x, y = e.y;
   if (d.rMax > 0 && d.sekil !== 0) { const r = (d.rMin + Math.random() * (d.rMax - d.rMin)) * s, b = Math.random() * Math.PI * 2; x += Math.cos(b) * r; y += Math.sin(b) * r; }
   const b0 = (d.boy < 2 ? d.boy + Math.random() * d.boyS : d.boy * (1 + wfxRnd() * Math.min(0.95, d.boyS))) * s;
   e.canli++;
-  wfxParca.push({ e, d, x, y, vx: Math.cos(a) * hiz, vy: Math.sin(a) * hiz, E, en: E, q: E / d.enerji, b0,
+  wfxParca.push({ e, d, arka: e.takipU !== null, x, y, vx: Math.cos(a) * hiz, vy: Math.sin(a) * hiz, E, en: E, q: E / d.enerji, b0,
     rot: Math.random() * Math.PI * 2, rr: (d.donMin + Math.random() * (d.donMax - d.donMin)) * Math.PI / 180,
     fr: d.kare > 1 ? (Math.random() * 4) | 0 : 0, k: d.surt >= 1 ? 0 : -Math.log(Math.max(0.01, d.surt)) / E, g: d.g * s });
+}
+// Sprey Jet alevi (W.M.D Jetpack / JetpackThruster): uçan her asker için yayıcı grubu tutulur ve her kare süresi
+// uzatılır; itki bitince ya da asker inince yayıcılar kendiliğinden söner. itki: Jetpack (bulut + kor), süzülme: Thruster.
+const wfxJetler = new Map();   // anahtar: 'i' + asker indeksi + tür
+function wfxJet(u, itki) {
+  const i = units.indexOf(u); if (i < 0) return;
+  const ad = itki ? 'jetpack' : 'jetpackthruster', k = 'i' + i + ad;
+  let g = wfxJetler.get(k);
+  if (!g || g.every(e => !wfxYayici.includes(e))) { g = wfxCal(ad, u.x - u.facing * 10, u.y - 10, { takipU: i, sure: 0.15 }); if (!g) return; wfxJetler.set(k, g); }
+  for (const e of g) e.sure = Math.max(e.sure, e.t + 0.12);
 }
 function wfxAdim(dt) {
   if (!wfxYayici.length && !wfxParca.length) return;
@@ -3216,6 +3131,7 @@ function wfxAdim(dt) {
     e.t += dt;
     if (e.t < 0) continue;
     if (e.takip !== null) { const pr = projs.find(q => q.id === e.takip); if (pr) { e.x = pr.x; e.y = pr.y; } else e.sure = Math.min(e.sure, e.t); }
+    if (e.takipU !== null) { const u = units[e.takipU]; if (u && u.alive) { e.x = u.x - u.facing * 10; e.y = u.y - 10; } else e.sure = Math.min(e.sure, e.t); }
     if (e.t <= e.sure + dt) {
       const d = e.d; let n = 0;
       if (d.oran < 0) n = e.ilk ? -d.oran : 0;                       // eksi oran: tek seferde patlama
@@ -3268,6 +3184,9 @@ function wfxDokuCiz(aile, i) {
   } else if (aile === 'fire') {    // alev dili: aşağıda geniş, yukarı sivrilen, ortası parlak
     for (let k = 0; k < 9; k++) { const t = k / 8; daire(32 + R(-4, 4) * (1 - t), 46 - t * 34, 16 * (1 - t * 0.75), 0.55 * (1 - t * 0.4)); }
     daire(32, 42, 9, 0.9);
+  } else if (aile === 'thruster') {   // itki alevi: üstte memede geniş ve parlak, aşağı doğru sivrilen koni
+    for (let k = 0; k < 12; k++) { const t = k / 11; daire(32 + R(-1.5, 1.5) * t, 8 + t * 50, 13 * (1 - t * 0.85), 0.5 * (1 - t * 0.5)); }
+    daire(32, 12, 8, 1);
   } else if (aile === 'flare') {   // parlama: yumuşak hâle + 4 ışın
     daire(32, 32, 32, 0.7); daire(32, 32, 10, 1);
     x.globalCompositeOperation = 'lighter';
@@ -3299,13 +3218,14 @@ function wfxBoya(aile, fr, r, g, b) {
   }
   return c;
 }
-function wfxCiz() {
+// arka: askeri izleyen yayıcıların (jetpack) parçacıkları askerlerden ÖNCE çizilir (W.M.D ParticlesBack gibi)
+function wfxCiz(arka = false) {
   if (!wfxParca.length) return;
   for (const topla of [false, true]) {
     ctx.save(); if (topla) ctx.globalCompositeOperation = 'lighter';
     for (const p of wfxParca) {
       const d = p.d;
-      if (d.topla !== topla) continue;
+      if (d.topla !== topla || !!p.arka !== arka) continue;
       const q = p.q, en = p.en;
       const boy = p.b0 * wfxEgri(en, d.b1a * q, d.b1b * q, d.b2a * q, d.b2b * q, 1, d.boyHedef, d.boySon);
       if (boy < 0.4) continue;
@@ -3320,7 +3240,8 @@ function wfxCiz() {
       if (al <= 0.01) continue;
       ctx.globalAlpha = Math.min(1, al);
       const img = wfxBoya(d.doku, p.fr, ch(0), ch(1), ch(2));
-      if (d.uzat) {   // hıza göre uzayan kıvılcım
+      if (d.doku === 'thruster') ctx.drawImage(img, p.x - boy * 0.3, p.y - boy * 0.08, boy * 0.6, boy);   // memeden aşağı alev
+      else if (d.uzat) {   // hıza göre uzayan kıvılcım
         const v = Math.hypot(p.vx, p.vy), L = Math.max(boy, v * 0.045 * (d.uzatK || 1));
         ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(Math.atan2(p.vy, p.vx)); ctx.drawImage(img, -L / 2, -boy / 2, L, boy); ctx.restore();
       } else if (p.rr) {
@@ -3526,11 +3447,20 @@ function portalFx(x, y, i) {
 const hexRgb = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
 // Portal geçişi (W.M.D TeleportIn/Out): saçılan kıvılcım + portal renginde şok halkası + yukarı akan parıltı
 function portalGecisFx(x, y, i) {
-  if (wfxHazir()) { wfxCal('teleportin', x, y); return; }
   const c = PORTAL_COLORS[i] || PORTAL_COLORS[0];
   for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, sp = 30 + Math.random() * 90; parts.push({ kind: 'spark', c, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 0, size: 2 + Math.random() * 2, life: 0.5, max: 0.5 }); }
   parts.push({ kind: 'halka', c: hexRgb(c), x, y, size: 46, life: 0.45, max: 0.45, vx: 0, vy: 0, g: 0 });
   for (let k = 0; k < 12; k++) parts.push({ kind: 'spark', c: k % 3 ? c : '#ffffff', x: x + rnd(-14, 14), y: y + rnd(-6, 10), vx: rnd(-12, 12), vy: rnd(-40, -10), g: -260, size: rnd(1.2, 2.4), life: rnd(0.45, 0.75), max: 0.75 });
+}
+
+// Sıra değişimi / asker değiştirme: yeni aktif askerin etrafında takım renginde iki halka ve kısa parıltı
+// (v27.5'te geri geldi; W.M.D'nin 'spawn' efekti kullanılmaz, kullanıcı onu beğenmedi)
+function siraFx(u) {
+  if (!u || !u.alive || !u.team) return;
+  const c = hexRgb(u.team.c || '#ffffff'), y = u.y - UNIT_H / 2;
+  parts.push({ kind: 'halka', c, x: u.x, y, size: 44, life: 0.55, max: 0.55, vx: 0, vy: 0, g: 0 });
+  parts.push({ kind: 'halka', c, x: u.x, y, size: 30, life: 0.4, max: 0.4, vx: 0, vy: 0, g: 0 });
+  for (let k = 0; k < 10; k++) { const a = Math.random() * 6.28; parts.push({ kind: 'spark', c: u.team.c, x: u.x + Math.cos(a) * 16, y: y + Math.sin(a) * 16, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40 - 20, g: -60, size: rnd(1.2, 2.2), life: 0.5, max: 0.5 }); }
 }
 
 function splash(x, y, b = 0) { splashFx(x, y, b); emit({ t: 'sp', x: r1(x), y: r1(y), b: b ? 1 : 0 }); }
@@ -3822,7 +3752,7 @@ function broadcastLobby() { for (const p of players) send(p.conn, lobbyMsg(p)); 
 function hostRoom() {
   if (!window.Peer) { $('homeStatus').textContent = 'Bağlantı kütüphanesi yüklenemedi. İnternetini kontrol edip sayfayı yenile.'; return; }
   goFullscreen(); saveName(); teardown();
-  mode = 'host'; mySlot = 0; inGame = false; lobbySize = 3; lobbyMode = 'ffa'; lobbyTeams = 2; lobbyHarita = 'plastik';
+  mode = 'host'; mySlot = 0; inGame = false; lobbySize = 3; lobbyMode = 'ffa'; lobbyTeams = 2; lobbyHarita = 'hurda';
   players = [{ name: myName() || 'Oyuncu 1', slot: 0, conn: null, wn: myWorms.slice(), side: 0 }];
   showView('vLobby'); renderLobby();
   openHostPeer();
@@ -4025,7 +3955,7 @@ function onClientData(m) {
     case 'lobby':
       players = Array.isArray(m.players) ? m.players.slice(0, MAX_PLAYERS).map(p => ({ name: String(p.name).slice(0, 14), slot: p.slot | 0, side: sideNo(p.side) })) : [];
       lobbyTeams = m.nteam === 3 ? 3 : 2;
-      mySlot = m.you | 0; lobbySize = clamp(m.size | 0, 2, 4); lobbyMode = m.mode === 'team' ? 'team' : 'ffa'; lobbyHarita = m.harita === 'hurda' ? 'hurda' : 'plastik'; lobbyYer = m.yer === 'nomad' ? 'nomad' : 'rastgele'; roomCode = String(m.code || roomCode).slice(0, 4); inGame = false;
+      mySlot = m.you | 0; lobbySize = clamp(m.size | 0, 2, 4); lobbyMode = m.mode === 'team' ? 'team' : 'ffa'; lobbyHarita = 'hurda'; lobbyYer = m.yer === 'nomad' ? 'nomad' : 'rastgele'; roomCode = String(m.code || roomCode).slice(0, 4); inGame = false;
       if (lobbyHarita === 'hurda') HARITA_HURDA_PNG.yukle().catch(() => {});
       $('joinGo').disabled = false;
       if (state !== 'menu') exitToMenuUI();
@@ -4044,7 +3974,7 @@ function onClientData(m) {
     case 's': if (inGame && teams.length && state !== 'menu') { if (m.n && m.n <= lastSnapN) break; lastSnapN = m.n | 0; applySnap(m); } break;
     case 'turn': if (!teams.length) break; turnTeam = m.tt | 0; closeWeaponMenu(); announceTurn(); break;
     case 'yer': if (!teams.length) break; turnTeam = m.tt | 0; closeWeaponMenu(); yerIlan(); break;
-    case 'x': if (inGame && terr) explodeFx(+m.x, +m.y, +m.r, m.s === 'elBomba' ? 'elBomba' : undefined); break;
+    case 'x': if (inGame && terr) explodeFx(+m.x, +m.y, +m.r, m.s === 'elBomba' ? 'elBomba' : undefined, m.kd === 1); break;
     case 'sp': if (inGame) splashFx(+m.x, +m.y, m.b === 1); break;
     case 'vf': if (inGame && terr && ['inis', 'kayma', 'mezar', 'metal', 'delgi'].includes(m.k)) vfxYap(m.k, +m.x, +m.y, +m.a); break;   // oda sahibinin fiziğinden görsel olay
     case 'bo': if (inGame) bounceFx(); break;
@@ -4399,38 +4329,11 @@ function toWorld(sx, sy) { const { vw, vh } = viewSize(); return [(sx - vw / 2) 
 
 // ---- Çizim ----
 function drawBackdrop(vw, vh, t) {
-  if (aktifHarita === 'hurda') return HARITA_HURDA_PNG.arkaPlan(ctx, vw, vh, cam);
+  if (HARITA_HURDA_PNG.hazir) return HARITA_HURDA_PNG.arkaPlan(ctx, vw, vh, cam);
+  // Hurda resimleri henüz yüklenmedi (açılış/menü): düz gökyüzü geçişi
   const g = ctx.createLinearGradient(0, 0, 0, vh);
   g.addColorStop(0, TEMA.gok[0]); g.addColorStop(0.55, TEMA.gok[1]); g.addColorStop(1, TEMA.gok[2]);
   ctx.fillStyle = g; ctx.fillRect(0, 0, vw, vh);
-  const [sr, sg, sb] = TEMA.gunes;
-  const sx = vw * 0.7 - (cam.x - W / 2) * cam.z * 0.04, sy = vh * 0.42 - (cam.y - H / 2) * cam.z * 0.06;
-  const sun = ctx.createRadialGradient(sx, sy, 0, sx, sy, vh * 0.55);
-  sun.addColorStop(0, `rgba(${sr},${sg},${sb},.9)`); sun.addColorStop(0.07, `rgba(${sr},${sg},${sb},.75)`);
-  sun.addColorStop(0.075, `rgba(${sr},${sg},${sb},.22)`); sun.addColorStop(1, `rgba(${sr},${sg},${sb},0)`);
-  ctx.fillStyle = sun; ctx.fillRect(0, 0, vw, vh);
-  // Uzak: çöp dağları, yakın: tepelerden fırlamış dev şişeler
-  const layers = [{ f: 0.15, base: 0.6, amp: 70, col: TEMA.uzak, sise: 0 }, { f: 0.32, base: 0.74, amp: 48, col: TEMA.yakin, sise: 1 }];
-  for (const L of layers) {
-    const off = -(cam.y - H / 2) * cam.z * L.f * 0.5, shift = cam.x * L.f * cam.z - vw / 2;
-    const yAt = x => { const wx = x + shift; return vh * L.base + off - (Math.sin(wx * 0.004 + L.f * 10) * L.amp + Math.sin(wx * 0.011 + 1) * L.amp * 0.4 + (hash2(Math.floor(wx / 46), L.sise) - 0.5) * L.amp * 0.5); };
-    ctx.fillStyle = L.col; ctx.beginPath(); ctx.moveTo(0, vh);
-    for (let x = 0; x <= vw + 8; x += 8) ctx.lineTo(x, yAt(x));
-    ctx.lineTo(vw, vh); ctx.closePath(); ctx.fill();
-    if (L.sise) {
-      const B = 230, i0 = Math.floor(shift / B) - 1, i1 = Math.floor((shift + vw) / B) + 1;
-      for (let i = i0; i <= i1; i++) {
-        if (hash2(i, 41) > 0.55) continue;
-        const x = i * B + hash2(i, 43) * 120 - shift, y = yAt(x) + 14, s = 0.7 + hash2(i, 47) * 0.6, a = (hash2(i, 53) - 0.5) * 0.7;
-        ctx.save(); ctx.translate(x, y); ctx.rotate(a); ctx.scale(s, s);
-        ctx.beginPath();
-        ctx.moveTo(-17, 0); ctx.lineTo(-17, -62); ctx.quadraticCurveTo(-17, -74, -8, -80); ctx.lineTo(-6, -92); ctx.lineTo(6, -92); ctx.lineTo(8, -80);
-        ctx.quadraticCurveTo(17, -74, 17, -62); ctx.lineTo(17, 0); ctx.closePath(); ctx.fill();
-        ctx.fillRect(-7.5, -100, 15, 9);
-        ctx.restore();
-      }
-    }
-  }
 }
 
 /* ======================================================================
@@ -5600,23 +5503,7 @@ function suUstuCiz() {
   }
 }
 function drawWater(t, x0, x1) {
-  if (aktifHarita === 'hurda') return HARITA_HURDA_PNG.su(ctx, t, x0, x1, WATER);
-  const wave = (x, k) => WATER + Math.sin(x * 0.018 + t * 1.4 + k) * 3 + Math.sin(x * 0.043 - t * 0.9) * 1.6;
-  ctx.fillStyle = TEMA.su;
-  ctx.beginPath(); ctx.moveTo(x0, H + 800);
-  for (let x = x0; x <= x1; x += 12) ctx.lineTo(x, wave(x, 0));
-  ctx.lineTo(x1, H + 800); ctx.closePath(); ctx.fill();
-  // Yüzeyde yüzen kapaklar
-  for (let x = Math.floor(x0 / 70) * 70; x <= x1; x += 70) {
-    if (hash2(x, 5) > 0.5) continue;
-    const px = x + hash2(x, 9) * 50, py = wave(px, 0) + 1.5;
-    ctx.fillStyle = TEMA.kapaklar[Math.floor(hash2(x, 13) * TEMA.kapaklar.length)];
-    ctx.beginPath(); ctx.ellipse(px, py, 3.4, 1.8, 0, 0, Math.PI * 2); ctx.fill();
-  }
-  ctx.strokeStyle = TEMA.suCizgi; ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let x = x0; x <= x1; x += 12) { const y = wave(x, 0); x === x0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y); }
-  ctx.stroke();
+  if (HARITA_HURDA_PNG.hazir) return HARITA_HURDA_PNG.su(ctx, t, x0, x1, WATER);
 }
 
 // Ekran dışındaki asker ve sandıklar için kenarda küçük oklar
@@ -5682,6 +5569,7 @@ function renderIc(t) {
   for (const c of crates) drawCrate(c, t);
   for (const k of kokular) { ctx.save(); ctx.translate(k.x, k.y); YENI.kokuBulutu(ctx, k.t / 1.2); ctx.restore(); }
   const benim = state === 'kaos' ? kaosBirimim() : active;   // Kaos Turu'nda yalnız kendi nişangâhın görünür
+  wfxCiz(true);   // jetpack alevi ve dumanı askerin arkasında
   for (const u of units) if (u.alive && u !== benim) drawUnit(u, false, t);
   if (benim && benim.alive) drawUnit(benim, true, t);
   for (const d of dudukler) { const u = units[d.i]; if (!u) continue; ctx.save(); ctx.translate(u.x + u.facing * 14, u.y - 20); ctx.scale(u.facing, 1); YENI.duduk(ctx); YENI.dudukDalga(ctx, d.t); ctx.restore(); }
@@ -5761,6 +5649,8 @@ function updateFx(dt) {
     parts.push({ kind: 'spark', c: Math.random() < 0.5 ? '#3fe0b0' : '#e6fff6', x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r, vx: -Math.cos(a) * r * 1.8, vy: -Math.sin(a) * r * 1.8, g: 0, size: 1.5 + Math.random() * 1.5, life: 0.5, max: 0.5 });
   }
   vfxAdim(dt); zerreAdim(dt); fitilAdim(dt); wfxAdim(dt);
+  if (state === 'aim' && !kaosTur && active && active.alive) { if (active !== siraSon) { siraSon = active; siraFx(active); } }   // sıra ya da asker değişti
+  else if (state !== 'aim' && state !== 'fly' && state !== 'settle') siraSon = null;
   for (const p of parts) {
     p.life -= dt; p.vy += p.g * dt;
     if (p.surt) { const k = Math.exp(-p.surt * dt); p.vx *= k; p.vy *= k; }   // sürtünme (W.M.D FinalSpeedFactor)
@@ -5778,7 +5668,12 @@ function updateFx(dt) {
   dudukler = dudukler.filter(d => d.t < 1);
   for (const k of kokular) k.t += dt;
   const ucanlar = kaosTur && kaos ? kaos.list.filter(kji).map(k => units[k.ui]).filter(u => u && u.alive && (state !== 'kaos' || u === kaosBirimim())) : jetItki && active && active.alive ? [active] : [];
-  for (const ju of ucanlar) {
+  if (wfxHazir()) {
+    for (const ju of ucanlar) { wfxJet(ju, true); wfxJet(ju, false); }   // itki: duman + kor ve alev konisi birlikte
+    const suzulen = kaosTur && kaos ? kaos.list.filter(k => kjk(k) && !kji(k)).map(k => units[k.ui]) : jetKul && !jetItki && active && active.alive && !active.grounded ? [active] : [];
+    for (const ju of suzulen) if (ju && ju.alive) wfxJet(ju, false);
+  }
+  else for (const ju of ucanlar) {
     const f = ju.facing, bx = ju.x - f * 10, by = ju.y - 10;
     for (let i = 0; i < 2; i++) parts.push({ kind: 'spark', c: YENI.SPREY_RENK[i] + '0.8)', x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 40, g: -20, size: 2 + Math.random() * 2.5, life: 0.22, max: 0.22 });
   }
@@ -6377,8 +6272,6 @@ function renderLobby(msg) {
   $('lteamsField').hidden = !tm;
   $('lt2').setAttribute('aria-pressed', String(lobbyTeams === 2)); $('lt3').setAttribute('aria-pressed', String(lobbyTeams === 3));
   $('lt2').disabled = $('lt3').disabled = !host;
-  $('lhPlastik').setAttribute('aria-pressed', String(lobbyHarita === 'plastik')); $('lhHurda').setAttribute('aria-pressed', String(lobbyHarita === 'hurda'));
-  $('lhPlastik').disabled = $('lhHurda').disabled = !host;
   $('lyRast').setAttribute('aria-pressed', String(lobbyYer !== 'nomad')); $('lyNomad').setAttribute('aria-pressed', String(lobbyYer === 'nomad'));
   $('lyRast').disabled = $('lyNomad').disabled = !host;
   [2, 3, 4].forEach(n => { const b = $('ls' + n); b.setAttribute('aria-pressed', String(n === lobbySize)); b.disabled = !host; });
@@ -6503,20 +6396,7 @@ $('lmFfa').addEventListener('click', () => setLobbyMode('ffa'));
 $('lmTeam').addEventListener('click', () => setLobbyMode('team'));
 $('lt2').addEventListener('click', () => setLobbyTeams(2));
 $('lt3').addEventListener('click', () => setLobbyTeams(3));
-// Harita seçimi: yerelde config.harita, lobide host seçer ve herkese yayınlanır
-function setLocalHarita(hr) {
-  config.harita = hr; $('hPlastik').setAttribute('aria-pressed', String(hr === 'plastik')); $('hHurda').setAttribute('aria-pressed', String(hr === 'hurda'));
-  if (hr === 'hurda') HARITA_HURDA_PNG.yukle().catch(() => {});
-}
-function setLobbyHarita(hr) {
-  if (mode !== 'host') return;
-  lobbyHarita = hr; if (hr === 'hurda') HARITA_HURDA_PNG.yukle().catch(() => {});
-  renderLobby(); broadcastLobby();
-}
-$('hPlastik').addEventListener('click', () => setLocalHarita('plastik'));
-$('hHurda').addEventListener('click', () => setLocalHarita('hurda'));
-$('lhPlastik').addEventListener('click', () => setLobbyHarita('plastik'));
-$('lhHurda').addEventListener('click', () => setLobbyHarita('hurda'));
+HARITA_HURDA_PNG.yukle().catch(() => {});   // tek harita: açılışta resimleri önceden yükle
 // Başlangıç: Rastgele (askerler haritaya dağıtılır) ya da Nomad (oyuncular sırayla kendileri yerleştirir)
 function setLocalYer(y) { config.yer = y; $('yRast').setAttribute('aria-pressed', String(y !== 'nomad')); $('yNomad').setAttribute('aria-pressed', String(y === 'nomad')); }
 function setLobbyYer(y) { if (mode !== 'host') return; lobbyYer = y; renderLobby(); broadcastLobby(); }
