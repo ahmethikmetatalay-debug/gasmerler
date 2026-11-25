@@ -474,14 +474,9 @@ button:focus-visible,input:focus-visible{outline:2px solid var(--ember);outline-
 
       <section class="view" id="vGorsel" hidden>
         <div class="lcol lc1">
-        <p class="lead">Bu ayarlar yalnız bu telefonu etkiler; aynı maçtaki diğer oyuncular kendi seçtikleriyle oynar.</p>
+        <p class="lead">Bu ayarlar yalnız bu telefonu etkiler.</p>
         </div>
         <div class="lcol lc3">
-        <div class="field">
-          <span class="flabel">Efektler</span>
-          <div class="seg"><button id="efNormal" aria-pressed="true">Normal</button><button id="efWmd" aria-pressed="false">W.M.D testi</button></div>
-          <p class="status">W.M.D testi: patlama, duman, toz ve kıvılcımlar Worms W.M.D'nin efekt ayarlarıyla (parçacık sayısı, ömür, boyut). Telefona yükünü ölçmek için.</p>
-        </div>
         <div class="field">
           <span class="flabel">FPS göster</span>
           <div class="seg"><button id="fpsKapali" aria-pressed="true">Kapalı</button><button id="fpsAcik" aria-pressed="false">Açık</button></div>
@@ -1726,6 +1721,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['27.4', '25 Kasım 2026', [
+    ['d', 'Efektler artık herkes için Worms W.M.D ayarlarıyla: patlama, duman, alev, toz, kıvılcım, roket izi, portal (Görsel ayarlarda yalnız FPS göstergesi kaldı)'],
+    ['k', 'Sırası gelen askerin etrafında çıkan halka ve parıltı efekti kaldırıldı'],
+  ]],
   ['27.3', '25 Kasım 2026', [
     ['y', 'Ana menüde Görsel ayarlar: efektleri Worms W.M.D ayarlarıyla deneme modu (telefona yükünü ölçmek için) ve FPS sayacı. Yalnız senin telefonunu etkiler'],
   ]],
@@ -3125,7 +3124,7 @@ function explodeFx(x, y, r, ses) {
 // ekranında rastgele üretir (ağdan gitmez). Katmanlar: parlama + şok halkası (kısa, toplamsal) → ateş topları →
 // ağır kıvılcım çizgileri ve toprak parçaları → yükselip büyüyen, koyudan açığa dönen duman → kalıcı krater dumanı,
 // korlar ve kenarda yanan küçük alevler. Parçacık sayısı patlama boyuna göre ölçeklenir ve parts 700 ile sınırlı.
-let yayicilar = [], siraSon = null;
+let yayicilar = [];   // v27.4: sıra başlangıcı efekti kullanıcı isteğiyle kaldırıldı
 // Fitil kıvılcımı: dinamit ve el bombasının fitilinden sürekli kıvılcım; son 1,5 sn'de hızlanır (yalnız görsel)
 function fitilAdim(dt) {
   for (const p of projs) {
@@ -3170,19 +3169,16 @@ function yumusakDaire(c, sert = 0.35) {
   return cv2;
 }
 
-// ==== W.M.D efekt testi (gizli performans test modu) ====
-// Görsel ayarlar → "Efektler: W.M.D testi" ya da adres ?wmdfx. efekt-wmd.js W.M.D'nin parçacık yayıcı AYARLARINI taşır
+// ==== W.M.D ayarlı efektler (v27.3'te test modu, v27.4'ten beri varsayılan) ====
+// efekt-wmd.js W.M.D'nin parçacık yayıcı AYARLARINI taşır
 // (parçacık sayısı, oran, ömür, hız, yerçekimi, sürtünme, 3 duraklı boyut/renk/alfa eğrisi, dönme, toplamsal karışım).
 // Dokular kodla üretilir (W.M.D'nin çizimleri kullanılmaz). Yalnız görsel; her telefon kendi seçer, ağ etkilenmez.
 const WFX_OLCEK = 0.5;          // W.M.D birimi → Gaşmerler px (solucan ~60 birim, asker 30 px)
 const WFX_EN_COK = 3000;        // güvenlik sınırı (W.M.D'nin kendi sınırları yayıcı başına MaxParticles)
 let wfxMod = false, wfxVeri = null, wfxYukleniyor = false, wfxYayici = [], wfxParca = [];
-function wfxAyarOku() {
-  let m = null; try { m = localStorage.getItem('gasmer-efekt'); } catch (e) {}
-  if (/[?&]wmdfx(&|=|$)/.test(location.search)) m = 'wmd';
-  wfxMod = m === 'wmd';
-  if (wfxMod) wfxYukle(); else { wfxYayici = []; wfxParca = []; }
-}
+// v27.4: W.M.D ayarlı efektler varsayılan ve tek seçenek (kullanıcı kararı). efekt-wmd.js açılışta yüklenir; yüklenemezse
+// (bağlantı koptu vb.) eski kodla çizilen efektler yedek olarak çalışır. İleride grafik ayarlarına "efektleri kapat" eklenebilir.
+function wfxAyarOku() { wfxMod = true; wfxYukle(); }
 function wfxYukle() {
   if (wfxVeri || wfxYukleniyor) return;
   wfxYukleniyor = true;
@@ -3343,7 +3339,7 @@ function fpsAdim(now) {
   fpsKare++;
   if (now - fpsT >= 500) {
     const fps = Math.round(fpsKare * 1000 / (now - fpsT)); fpsKare = 0; fpsT = now;
-    const el = $('fpsSayac'); if (el) el.textContent = `${fps} FPS · ${wfxMod ? 'W.M.D' : 'Normal'} · ${parts.length + wfxParca.length} parçacık`;
+    const el = $('fpsSayac'); if (el) el.textContent = `${fps} FPS · ${parts.length + wfxParca.length} parçacık`;
   }
 }
 
@@ -3535,15 +3531,6 @@ function portalGecisFx(x, y, i) {
   for (let k = 0; k < 14; k++) { const a = Math.random() * 6.28, sp = 30 + Math.random() * 90; parts.push({ kind: 'spark', c, x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, g: 0, size: 2 + Math.random() * 2, life: 0.5, max: 0.5 }); }
   parts.push({ kind: 'halka', c: hexRgb(c), x, y, size: 46, life: 0.45, max: 0.45, vx: 0, vy: 0, g: 0 });
   for (let k = 0; k < 12; k++) parts.push({ kind: 'spark', c: k % 3 ? c : '#ffffff', x: x + rnd(-14, 14), y: y + rnd(-6, 10), vx: rnd(-12, 12), vy: rnd(-40, -10), g: -260, size: rnd(1.2, 2.4), life: rnd(0.45, 0.75), max: 0.75 });
-}
-// Sıra başlangıcı: sırası gelen askerin etrafında takım renginde iki halka ve kısa parıltı
-function siraFx(u) {
-  if (!u || !u.alive || !u.team) return;
-  if (wfxHazir()) { wfxCal('spawn', u.x, u.y - UNIT_H / 2); return; }
-  const c = hexRgb(u.team.c || '#ffffff'), y = u.y - UNIT_H / 2;
-  parts.push({ kind: 'halka', c, x: u.x, y, size: 44, life: 0.55, max: 0.55, vx: 0, vy: 0, g: 0 });
-  parts.push({ kind: 'halka', c, x: u.x, y, size: 30, life: 0.4, max: 0.4, vx: 0, vy: 0, g: 0 });
-  for (let k = 0; k < 10; k++) { const a = Math.random() * 6.28; parts.push({ kind: 'spark', c: u.team.c, x: u.x + Math.cos(a) * 16, y: y + Math.sin(a) * 16, vx: Math.cos(a) * 40, vy: Math.sin(a) * 40 - 20, g: -60, size: rnd(1.2, 2.2), life: 0.5, max: 0.5 }); }
 }
 
 function splash(x, y, b = 0) { splashFx(x, y, b); emit({ t: 'sp', x: r1(x), y: r1(y), b: b ? 1 : 0 }); }
@@ -5774,8 +5761,6 @@ function updateFx(dt) {
     parts.push({ kind: 'spark', c: Math.random() < 0.5 ? '#3fe0b0' : '#e6fff6', x: h.x + Math.cos(a) * r, y: h.y + Math.sin(a) * r, vx: -Math.cos(a) * r * 1.8, vy: -Math.sin(a) * r * 1.8, g: 0, size: 1.5 + Math.random() * 1.5, life: 0.5, max: 0.5 });
   }
   vfxAdim(dt); zerreAdim(dt); fitilAdim(dt); wfxAdim(dt);
-  if (state === 'aim' && !kaosTur && active && active.alive) { if (active !== siraSon) { siraSon = active; siraFx(active); } }
-  else if (state !== 'aim' && state !== 'fly' && state !== 'settle') siraSon = null;
   for (const p of parts) {
     p.life -= dt; p.vy += p.g * dt;
     if (p.surt) { const k = Math.exp(-p.surt * dt); p.vx *= k; p.vy *= k; }   // sürtünme (W.M.D FinalSpeedFactor)
@@ -6545,12 +6530,9 @@ $('statsBtn').addEventListener('click', () => showView('vStats'));
 $('notlarBtn').addEventListener('click', () => showView('vNotlar'));
 $('gorselBtn').addEventListener('click', () => showView('vGorsel'));
 function gorselCiz() {
-  $('efNormal').setAttribute('aria-pressed', String(!wfxMod)); $('efWmd').setAttribute('aria-pressed', String(wfxMod));
   $('fpsKapali').setAttribute('aria-pressed', String(!fpsGoster)); $('fpsAcik').setAttribute('aria-pressed', String(fpsGoster));
 }
 const ayarYaz = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
-$('efNormal').addEventListener('click', () => { ayarYaz('gasmer-efekt', 'normal'); if (/[?&]wmdfx/.test(location.search)) history.replaceState(null, '', location.pathname); wfxAyarOku(); gorselCiz(); });
-$('efWmd').addEventListener('click', () => { ayarYaz('gasmer-efekt', 'wmd'); wfxAyarOku(); gorselCiz(); });
 $('fpsKapali').addEventListener('click', () => { ayarYaz('gasmer-fps', '0'); fpsAyarOku(); gorselCiz(); });
 $('fpsAcik').addEventListener('click', () => { ayarYaz('gasmer-fps', '1'); fpsAyarOku(); gorselCiz(); });
 wfxAyarOku(); fpsAyarOku();
@@ -6660,7 +6642,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 
 // Otomatik testler için iç duruma erişim; sadece adres ?test ile açılınca
 if (new URLSearchParams(location.search).has('test')) window.__t = {
-  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wfxParca() { return wfxParca; }, get wfxHazir() { return wfxHazir(); }, wfxCal, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
+  get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wfxParca() { return wfxParca; }, get wfxHazir() { return wfxHazir(); }, set wfxMod(v) { wfxMod = !!v; }, wfxCal, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
   get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
