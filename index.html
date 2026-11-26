@@ -658,7 +658,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v297-';
+const ID_PREFIX = 'gasmerler-v298-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1683,6 +1683,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['29.8', '26 Kasım 2026', [
+    ['d', 'Rastgele haritada köprülerin üstüne süs eşyası konmuyor'],
+  ]],
   ['29.7', '26 Kasım 2026', [
     ['d', 'Askerler parçaların arasındaki yarıklara sıkışıp art arda düşme hasarı alarak ölmüyor; araziye gömülen asker ve ördek dışarı itilir'],
     ['d', 'Düşme hasarı gerçekten düşülen yüksekliğe göre (150 px altı hasar yok)'],

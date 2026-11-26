@@ -26,7 +26,7 @@ const HARITA_RASTGELE = (() => {
   const ALT = 24, GOMUL = 60;      // taban alt kesiği su çizgisinin ALT..ALT+GOMUL px altında
   const UC = 40;                   // köprü ucu karanın üstüne bu kadar biner
   const TAVAN = 110;               // hiçbir parça bundan yukarı çıkmaz (gökyüzü payı)
-  const SURUM = 7;
+  const SURUM = 8;
   let W = 2900, H = 1300, SU = 1260, ayar = BOYUT.o;
 
   const OLCEKLER = { zemin: [85, 100, 115], ust: [85, 100, 115], yan: [90, 110], ada: [90, 110], kiris: [90, 110, 130], dekor: [90, 110] };
@@ -320,6 +320,7 @@ const HARITA_RASTGELE = (() => {
       for (let c = 0; c < q.w; c++) { const t = Tz(x + c); en = Math.min(en, t); eb = Math.max(eb, t); }
       if (eb >= YOK || eb - en > 9 || eb > SU - 30 || en - q.h < TAVAN) continue;
       if (konan.some(k => Math.abs(k.x - x) < 70 && Math.abs(k.y - en) < 120) || ekler.some(e => Math.abs(e.x - x - (q.w >> 1)) < 70)) continue;
+      if (plan.some(o => o.p.tur === 'kiris' && x < o.x + o.p.w && x + q.w > o.x)) continue;   // köprü üstüne dekor yok
       const io = { p: q, x, y: 0, ayna };
       let y0 = YOK;
       for (let c = 0; c < q.w; c++) { const a = q.alt[ayna ? q.w - 1 - c : c]; if (a >= 0) y0 = Math.min(y0, Tz(x + c) - a); }
