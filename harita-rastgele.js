@@ -58,8 +58,9 @@ const HARITA_RASTGELE = (() => {
       PARCA.push(p);
     }
   }
-  // Bina (v3, W.M.D gibi): maske iskeletten; çizim üç resim (arka + iskelet arazide, cephe ayrı katmanda)
-  const ADLAR = [...new Set(PARCA.flatMap(p => p.tur === 'bina' ? [p.ad + '-arka', p.ad + '-iskelet', p.ad + '-on'] : [p.ad]))];
+  // Bina (v3, W.M.D gibi): maske iskeletten; çizim iki resim (iskelet arazide, cephe ayrı katmanda).
+  // Arka duvar yok: içeri girince iskeletin arkasında gökyüzü ve siluetler görünür (kullanıcı isteği).
+  const ADLAR = [...new Set(PARCA.flatMap(p => p.tur === 'bina' ? [p.ad + '-iskelet', p.ad + '-on'] : [p.ad]))];
   const tur = t => PARCA.filter(p => p.tur === t);
   const ZEMIN = tur('zemin'), UST = tur('ust'), YAN = tur('yan'), KIRIS = tur('kiris'), DEKOR = tur('dekor'), BINA = tur('bina');
   const ADA = PARCA.filter(p => p.tur === 'ada' || /levha|raf/.test(p.ad));   // yassı yığınlar yüzen ada olarak da kullanılır
@@ -429,10 +430,10 @@ const HARITA_RASTGELE = (() => {
     for (const [o] of sira) {
       const im = img[o.p.ad], p = o.p;
       c.save();
-      if (p.tur === 'bina') {   // arka duvar + iskelet arazide; cephe ayrı tuvalde (oyunda askerlerin önünde, oyulur)
+      if (p.tur === 'bina') {   // iskelet arazide; cephe ayrı tuvalde (oyunda askerlerin önünde, oyulur)
         const w = p.w * K, h = p.h * K;
         c.translate(o.x * K + (o.ayna ? w : 0), o.y * K); if (o.ayna) c.scale(-1, 1);
-        c.drawImage(img[p.ad + '-arka'], 0, 0, w, h); c.drawImage(img[p.ad + '-iskelet'], 0, 0, w, h);
+        c.drawImage(img[p.ad + '-iskelet'], 0, 0, w, h);
         const cv2 = document.createElement('canvas'); cv2.width = Math.round(w); cv2.height = Math.round(h);
         const c2 = cv2.getContext('2d'); if (o.ayna) { c2.translate(cv2.width, 0); c2.scale(-1, 1); }
         c2.drawImage(img[p.ad + '-on'], 0, 0, cv2.width, cv2.height);
@@ -459,7 +460,7 @@ const HARITA_RASTGELE = (() => {
   }
 
   // ---- Bina cepheleri (W.M.D gibi): askerlerin önünde çizilir. Bu cihazın askeri içerideyse cephe tamamen kalkar
-  // (iç: koyu arka duvar + iskelet görünür); başkasının askeri içerideyse cephe durur, o asker gizli kalır.
+  // (iç: iskelet ve arkasında gökyüzü görünür); başkasının askeri içerideyse cephe durur, o asker gizli kalır.
   // Patlamalar cepheyi arazi gibi oyar (carve çağırır). Yalnız görsel; maske iskelette.
   let cepheler = [];
   function cepheOy(x, y, r) {
