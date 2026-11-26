@@ -26,7 +26,7 @@ const HARITA_RASTGELE = (() => {
   const ALT = 24, GOMUL = 60;      // taban alt kesiği su çizgisinin ALT..ALT+GOMUL px altında
   const UC = 40;                   // köprü ucu karanın üstüne bu kadar biner
   const TAVAN = 110;               // hiçbir parça bundan yukarı çıkmaz (gökyüzü payı)
-  const SURUM = 9;
+  const SURUM = 10;
   let W = 2900, H = 1300, SU = 1260, ayar = BOYUT.o;
 
   const OLCEKLER = { zemin: [85, 100, 115], ust: [85, 100, 115], yan: [90, 110], ada: [90, 110], kiris: [90, 110, 130], dekor: [90, 110] };
@@ -100,7 +100,7 @@ const HARITA_RASTGELE = (() => {
   }
 
   const img = {};
-  let yukleniyor = null, hazir = false, plan = [], ekler = [];
+  let yukleniyor = null, hazir = false, plan = [], ekler = [], yarmalar = [];   // yarmalar: bina girişi önünde açılan arazi [x, y0, y1]
 
   function yukle(klasor = 'assets/maps/hurda-parcalar/') {
     if (yukleniyor) return yukleniyor;
@@ -114,10 +114,10 @@ const HARITA_RASTGELE = (() => {
     return yukleniyor;
   }
 
-  // ---- Arka plan (v3): gökyüzü, uzak/yakın siluet, ön katman. Yalnız çizim; maskeye girmez.
+  // ---- Arka plan (v3): gökyüzü, uzak/yakın siluet. Yalnız çizim; maskeye girmez. (Suyun önündeki ön katman denendi, kaldırıldı.)
   // Yüklenmezse oyun sabit Hurda'nın arka planına düşer (bloklamaz).
-  const ARKA = ['gok', 'uzak', 'yakin', 'on'], ARKA_SURUM = 1, arka = {};
-  const ARKA_DOLGU = { uzak: '#9ba1d2', yakin: '#4a383f', on: '#152324' };   // bandın altı (resmin son satır rengi)
+  const ARKA = ['gok', 'uzak', 'yakin'], ARKA_SURUM = 1, arka = {};
+  const ARKA_DOLGU = { uzak: '#9ba1d2', yakin: '#4a383f' };   // bandın altı (resmin son satır rengi)
   let arkaYuklendi = false;
   function arkaYukle(klasor = 'assets/maps/hurda-arka/') {
     let kalan = ARKA.length;
@@ -150,20 +150,7 @@ const HARITA_RASTGELE = (() => {
     serit(ctx, 'yakin', vw, vh, kam, 0.28, 0.50, 0.34);
     return true;
   }
-  // Ön katman: dünya koordinatlarında, suyun önünde; askerden biraz hızlı kayar (yakınlık hissi)
-  const ON_BOY = 80, ON_ALT = 20;   // dünya px; bandın gövdesi su çizgisinin altında kalır, yalnız kazıklar suyun üstüne çıkar
-  function onKatman(ctx, kam, x0, x1) {
-    if (!arkaYuklendi) return;
-    const im = arka.on, w = im.width * ON_BOY / im.height, y = H + ON_ALT - ON_BOY;
-    const kay = (kam.x - W / 2) * 0.18;
-    const ilk = Math.floor((x0 + kay) / w) - 1;
-    for (let i = ilk; i * w - kay < x1 + w; i++) {
-      const x = i * w - kay, ayna = (i & 1) === 1;
-      ctx.save(); ctx.translate(x + (ayna ? w : 0), y); ctx.scale(ayna ? -1 : 1, 1);
-      ctx.drawImage(im, 0, 0, w + 0.5, ON_BOY); ctx.restore();
-    }
-    ctx.fillStyle = ARKA_DOLGU.on; ctx.fillRect(x0 - 50, H + ON_ALT - 0.5, x1 - x0 + 100, 1200);
-  }
+
 
   // Boyut seçimi: 'k' | 'o' | 'b' (bilinmeyen → orta). Dünyayı ayarlar; oyun W/H/su çizgisini buradan alır
   function ayarla(kod) {
@@ -204,7 +191,7 @@ const HARITA_RASTGELE = (() => {
     const r = rastgele((tohum >>> 0) ^ 0x5bd1e995), sec = a => a[Math.floor(r() * a.length)];
     const ara = (a, b) => a + Math.floor(r() * (b - a + 1));
     const karistir = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(r() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
-    solid.fill(0); plan = []; ekler = [];
+    solid.fill(0); plan = []; ekler = []; yarmalar = [];
     // T: her sütunun en üst katı satırı (yüzey); yerleştirdikçe güncellenir
     const T = new Int32Array(W).fill(YOK);
     const tazele = (x0, x1) => { for (let wx = Math.max(0, x0); wx < Math.min(W, x1); wx++) { let y = 0; while (y < H && !solid[y * W + wx]) y++; T[wx] = y < H ? y : YOK; } };
@@ -384,13 +371,29 @@ const HARITA_RASTGELE = (() => {
         const y = eb + 3 - q.taban;
         if (y < TAVAN || !bosMu(solid, x - 8, y, x + q.w + 8, en - 1)) continue;
         if (plan.some(o => (o.p.tur === 'kiris' || o.p.tur === 'bina') && x < o.x + o.p.w + 60 && x + q.w + 60 > o.x)) continue;
-        aday.push({ p: q, x, y, ayna: r() < 0.5 });
+        // Yan girişlerin önünde (25-45 px dışarıda) taban döşemesine yakın zemin olan taraf sayısı: çok olan tercih edilir
+        const ust = y + q.taban - q.kalin, yanIyi = wx => { const t = Tz(wx); return t > ust - 40 && t < ust + 24; };
+        const puan = (yanIyi(x - 25) && yanIyi(x - 45) ? 1 : 0) + (yanIyi(x + q.w + 25) && yanIyi(x + q.w + 45) ? 1 : 0);
+        aday.push({ p: q, x, y, ayna: r() < 0.5, puan });
       }
+      const enIyi = aday.reduce((m, a) => Math.max(m, a.puan), 0);
+      for (let i = aday.length - 1; i >= 0; i--) if (aday[i].puan < enIyi) aday.splice(i, 1);
+      for (const a of aday) delete a.puan;
       if (aday.length) {
         const o = sec(aday), ust = o.y + q.taban - q.kalin;   // taban döşemesinin üstü
         let en = YOK; for (let c = 0; c < q.w; c++) en = Math.min(en, Tz(o.x + c));
         for (let wy = Math.max(0, en - 1); wy < ust; wy++) solid.fill(0, wy * W + o.x, wy * W + o.x + q.w);
         koy(o); b++;
+        // Yan girişlerin önü: dışarıdaki arazi taban döşemesinden yüksekse 48 px'lik geçit açılır, 40 px'te
+        // doğal yüzeye yükselen rampa (eğim 0,6). Çizimden de silinir (arazi()).
+        for (const yon of [-1, 1]) for (let d = 0; d < 40; d++) {
+          const wx = yon < 0 ? o.x - 1 - d : o.x + q.w + d; if (wx < 0 || wx >= W) continue;
+          const y0 = Math.max(0, ust - 48), y1 = ust - Math.floor(d * 0.6);
+          let a = -1;
+          for (let wy = y0; wy < y1; wy++) if (solid[wy * W + wx]) { solid[wy * W + wx] = 0; if (a < 0) a = wy; }
+          if (a >= 0) yarmalar.push(wx, a, y1);
+        }
+        tazele(o.x - 41, o.x + q.w + 41);
       }
     }
 
@@ -447,11 +450,17 @@ const HARITA_RASTGELE = (() => {
       c.restore();
     }
     c.setTransform(K, 0, 0, K, 0, 0);
+    if (yarmalar.length) {   // bina girişi önündeki geçit (maskede açıldı): çizimden de sil
+      const sil = new Path2D();
+      for (let i = 0; i < yarmalar.length; i += 3) sil.rect(yarmalar[i] - 0.3, yarmalar[i + 1] - 1, 1.6, yarmalar[i + 2] - yarmalar[i + 1] + 1);
+      c.save(); c.globalCompositeOperation = 'destination-out'; c.fill(sil); c.restore();
+    }
     return { terr: cv, tctx: c };
   }
 
-  // ---- Bina cepheleri (W.M.D gibi): askerlerin önünde çizilir; içeride asker varken yarı saydam olur,
-  // patlamalar arazi gibi oyar (carve çağırır). Yalnız görsel; maske iskelette.
+  // ---- Bina cepheleri (W.M.D gibi): askerlerin önünde çizilir. Bu cihazın askeri içerideyse cephe tamamen kalkar
+  // (iç: koyu arka duvar + iskelet görünür); başkasının askeri içerideyse cephe durur, o asker gizli kalır.
+  // Patlamalar cepheyi arazi gibi oyar (carve çağırır). Yalnız görsel; maske iskelette.
   let cepheler = [];
   function cepheOy(x, y, r) {
     for (const c of cepheler) {
@@ -467,19 +476,27 @@ const HARITA_RASTGELE = (() => {
     const ust = ustW(o, Math.floor(u.x));
     return ust < YOK && u.y - 24 > ust;
   }
-  function cepheCiz(ctx, birimler, dt) {
+  // benim(u): bu cihazda o askeri oynayan görebilir mi
+  function cepheCiz(ctx, birimler, dt, benim) {
     for (const c of cepheler) {
-      const ic = birimler.some(u => u.alive && icinde(c.o, u));
-      c.a += ((ic ? 0.28 : 1) - c.a) * Math.min(1, dt * 6);
+      const ic = birimler.some(u => u.alive && benim(u) && icinde(c.o, u));
+      c.a += ((ic ? 0 : 1) - c.a) * Math.min(1, dt * 8);
+      if (c.a < 0.01) continue;
       ctx.globalAlpha = c.a; ctx.drawImage(c.cv, c.o.x, c.o.y, c.o.p.w, c.o.p.h);
     }
     ctx.globalAlpha = 1;
+  }
+  // Asker başkasından gizli mi: bir binanın içinde ve o binanın cephesi bu cihazda kapalı değil
+  function gizli(u) { return cepheler.some(c => c.a > 0.5 && icinde(c.o, u)); }
+  // Nokta bir binanın sınırları içinde mi (çatı dahil; başlangıç yeri seçerken)
+  function binada(x, y) {
+    return plan.some(o => o.p.tur === 'bina' && x > o.x - 12 && x < o.x + o.p.w + 12 && y > o.y - 40 && y < o.y + o.p.taban + 6);
   }
 
   return {
     ad: 'Hurda Gezegeni (rastgele)', BOYUT,
     get W() { return W; }, get H() { return H; }, get SU() { return SU; },
     get hazir() { return hazir; }, get plan() { return plan; }, get ekler() { return ekler; },
-    yukle, ayarla, kur, arazi, arkaPlan, onKatman, cepheOy, cepheCiz,
+    yukle, ayarla, kur, arazi, arkaPlan, cepheOy, cepheCiz, binada, gizli,
   };
 })();

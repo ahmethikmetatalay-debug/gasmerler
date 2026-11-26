@@ -658,7 +658,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v299-';
+const ID_PREFIX = 'gasmerler-v300-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1357,6 +1357,7 @@ function startGame(opts) {
     const x = 80 + rng() * (W - 160), fl = aktifHarita === 'hurda' ? floorsAt(x) : [surfaceY(x)], y = fl[Math.floor(rng() * fl.length)] ?? null;
     if (y === null || y > WATER - 40 || xs.some(o => Math.hypot(o.x - x, o.y - y) < 70) || crates.some(c => Math.hypot(c.x - x, c.y - y) < 60)) continue;
     if (aktifHarita === 'hurda' && altinRafi(x, y)) continue;
+    if (haritaRastgele && HARITA_RASTGELE.binada(x, y)) continue;   // binanın içinde ya da üstünde kimse başlamaz
     xs.push({ x, y });
   }
   for (let k = 0; k < total; k++) {
@@ -1422,6 +1423,7 @@ function yerBul(x, y) {
   for (let k = 0; k < 40 && !bodyFree(x, y, UNIT_H); k++) y--;
   if (!bodyFree(x, y, UNIT_H)) return null;
   if (units.some(o => o.alive && Math.hypot(o.x - x, o.y - y) < 26)) return null;   // başka askerin üstüne konmaz
+  if (haritaRastgele && HARITA_RASTGELE.binada(x, y)) return null;   // binaya asker konmaz (oyun başında kimse binada olmasın)
   return { x, y };
 }
 function rastgeleYer() {
@@ -1429,6 +1431,7 @@ function rastgeleYer() {
     const x = 80 + rng() * (W - 160), fl = aktifHarita === 'hurda' ? floorsAt(x) : [surfaceY(x)], y = fl[Math.floor(rng() * fl.length)];
     if (y == null) continue;
     const p = yerBul(x, y - 2);
+    if (p && haritaRastgele && HARITA_RASTGELE.binada(p.x, p.y)) continue;
     if (p && (tries > 200 || !units.some(o => o.alive && Math.hypot(o.x - p.x, o.y - p.y) < 70))) return p;
   }
   return yerBul(W / 2, 0) || { x: W / 2, y: surfaceY(W / 2) ?? 200 };
@@ -1465,64 +1468,125 @@ function yerHayalCiz(t) {
 }
 
 // ---- Asit Yağmuru: üç tur üst üste kimse hasar almazsa bir tur uyarı (hafif yağmur), sonra 2 sn yoğun yağış ----
-// Yağış gökyüzüne açık toprağı eritir (sivri tepeler yumuşar) ve açıkta duran askerlere 5-10 hasar verir.
-// Erime engebeleri korur ve yenilerini açar: yüzey kendi şeklini izleyerek aşağı iner (tepe tepe, oyuk oyuk kalır),
-// erime derinliği ise yer yer değişir: dalgalı bir "asit haritası" bazı yerlerde ince bir kat, bazı yerlerde derin
-// oyuklar açar. Her yağmurda harita farklıdır (host'un rng'si; erime aralıkları misafirlere aynen gider).
-// Bir noktada en çok ASIT_MAX px; yalnız gökyüzüne açık ilk toprak katmanı erir (mağara tavanı delinmez).
-const ASIT_SAKIN = 2, ASIT_SURE = 2, ASIT_ERI = 8, ASIT_MAX = 50, ASIT_TABAN = 10;
+// Yağış gökyüzüne açık toprağı eritir ve açıkta duran askerlere 5-10 hasar verir.
+// v29.9: erime damla damla. Her damla gökten düşer, ilk toprağa çarpar, yokuş aşağı birkaç px yuvarlanır ve
+// küçük yuvarlak bir oyuk açar (r 3-6). Damlalar sırayla bir kopya maske üzerinde işlenir (sonrakiler öncekilerin
+// açtığı oyuğa düşer), böylece yüzey kendi şeklini izleyerek yumuşakça iner, çukurlarda daha çok erir; eski sütun
+// yöntemindeki ince dikey yarıklar oluşmaz. Damla yoğunluğu dalgalı bir "asit haritası"yla yer yer değişir.
+// İnce zemin (köprü, ada, kat döşemesi) delinmez: damlanın altında en az ASIT_TABAN px toprak kalır.
+// Host hesaplar; oyuk listesi [x, y, r, ...] misafirlere aynen gider (carveSolid ile her cihazda aynı sonuç).
+const ASIT_SAKIN = 2, ASIT_SURE = 2, ASIT_TABAN = 10, ASIT_YOGUN = 1, ASIT_DERIN = 18;   // YOGUN: kaç px'e bir damla; DERIN: bir yağışta sütun başına en çok erime
 let sakinTur = 0, hasarVar = false, asitDurum = null, asitT = 0, cizirtilar = [];
 function asitEritHesapla() {
-  const out = [], bos = WATER - 2;
-  // üç dalga boyunda (yaklaşık 90, 180, 350 px) rastgele evreli dalgaların toplamı: 0..1 arası yumuşak gürültü
+  const kopya = solid.slice(), bos = WATER - 2, out = [];
+  const kati = (x, y) => x >= 0 && x < W && y >= 0 && y < H && kopya[y * W + x] === 1;
   const d = [[90, rng() * 6.28, 0.3], [180, rng() * 6.28, 0.4], [350, rng() * 6.28, 0.3]];
-  const top = new Int32Array(W), izin = new Float32Array(W), iste = new Float32Array(W);
-  for (let x = 0; x < W; x++) {
-    let y = 0; while (y < WATER && !solid[y * W + x]) y++;
-    top[x] = y;
-    if (y >= bos) { izin[x] = -1; continue; }
-    let n = 0; for (const [L, f, w] of d) n += w * (0.5 + 0.5 * Math.sin(x / L * 6.283 + f));
-    iste[x] = ASIT_ERI + (ASIT_MAX - ASIT_ERI) * Math.pow(n, 2.5);   // çoğu yer ince, arada derin oyuklar
-    // İnce zemin (köprü, ada, mağara tavanı) delinmesin: üstteki toprak katmanının en az ASIT_TABAN px'i kalır
-    let kalin = 0; while (y + kalin < bos && solid[(y + kalin) * W + x]) kalin++;
-    izin[x] = y + kalin >= bos ? 1e9 : Math.max(0, kalin - ASIT_TABAN);
+  const yogun = x => { let n = 0; for (const [L, f, w] of d) n += w * (0.5 + 0.5 * Math.sin(x / L * 6.283 + f)); return n; };
+  const ilk = (x, y0) => { let y = Math.max(0, y0); while (y < bos && !kati(x, y)) y++; return y; };   // x sütununda y0'dan aşağı ilk toprak
+  const ust0 = new Int32Array(W); for (let x = 0; x < W; x++) ust0[x] = ilk(x, 0);   // yağış öncesi yüzey
+  const N = Math.round(W / ASIT_YOGUN);
+  for (let i = 0; i < N; i++) {
+    let x = Math.floor(rng() * W);
+    const r = 4 + Math.floor(rng() * 4), sans = rng();   // r 4-7
+    if (sans > 0.2 + 0.8 * Math.pow(yogun(x), 1.5)) continue;   // seyrek yağan yer
+    let y = ilk(x, 0);
+    if (y >= bos) continue;
+    // Açıkta kalan tümsek önce aşınır: değdiği yerin 6 px çevresinde (aynı katmanda) en yüksek noktayı oyar.
+    // Çukura düşen damla çukuru derinleştirmez, kenarını aşındırır (dar kuyu oluşmaz, sivri yerler yuvarlanır).
+    // Tepe ince bir kenardaysa (oyulamıyorsa) damla değdiği yeri oyar.
+    let tx = x, ty = y;
+    for (let c = x - 6; c <= x + 6; c++) {
+      if (c < 0 || c >= W) continue;
+      const yc = ilk(c, ty - 20);
+      if (yc < ty && yc > ty - 20 && !kati(c, yc - 1)) { ty = yc; tx = c; }
+    }
+    // İnce zemin delinmesin: dairenin değdiği her sütunda oyuğun altında en az ASIT_TABAN px toprak kalmalı
+    // (kalmazsa damla küçülür, olmazsa hiç oymaz). Su çizgisine kadar inen kalın kara sınırsız.
+    const uygun = (x, rr, cy) => {
+      for (let c = x - rr; c <= x + rr; c++) {
+        const h = Math.floor(Math.sqrt(rr * rr - (c - x) * (c - x))), alt = cy + h;
+        let yc = Math.max(0, cy - h); while (yc <= alt && !kati(c, yc)) yc++;
+        if (yc > alt) continue;   // bu sütunda toprağa değmiyor
+        if (alt > ust0[c] + ASIT_DERIN) return false;   // damlalar aynı çukurda toplanıp dar kuyu kazmasın
+        let son = yc;   // katmanın altı; parça çizimindeki küçük boşluklar (< 12 px) katmanı bölmez
+        while (son < bos) {
+          if (kati(c, son)) { son++; continue; }
+          let g = 0; while (g < 12 && son + g < bos && !kati(c, son + g)) g++;
+          if (g < 12 && son + g < bos) son += g; else break;
+        }
+        if (son < bos && son - alt <= ASIT_TABAN) return false;
+      }
+      return true;
+    };
+    let rr = 0, cy = 0;
+    for (const [ax, ay] of tx === x ? [[x, y]] : [[tx, ty], [x, y]]) {
+      rr = r; cy = ay + Math.round(r * 0.4);
+      while (rr >= 3 && !uygun(ax, rr, cy)) { rr--; cy = ay + Math.round(rr * 0.4); }
+      if (rr >= 3) { x = ax; break; }
+    }
+    if (rr < 3) continue;
+    for (let yy = cy - rr; yy <= cy + rr; yy++) for (let xx = x - rr; xx <= x + rr; xx++) {
+      const dx = (xx - x) / rr, dy = (yy - cy) / rr;
+      if (dx * dx + dy * dy <= 1 && xx >= 0 && xx < W && yy >= 0 && yy < H) kopya[yy * W + xx] = 0;
+    }
+    out.push(x, cy, rr);
   }
-  // Yumuşatma: komşu sütunlar aynı yüzeydeyse (yükseklik farkı 24 px'ten az) izin verilen en az derinliği paylaşır,
-  // sonra derinlik 9 sütunluk pencerede ortalanır; böylece tek tük sütun dikilip ince dikey çizgi kalmaz
-  const ayni = (x, xx) => xx >= 0 && xx < W && izin[xx] >= 0 && Math.abs(top[xx] - top[x]) < 24;
-  const sinir = new Float32Array(W);
-  for (let x = 0; x < W; x++) { if (izin[x] < 0) continue; let m = izin[x]; for (let k = -3; k <= 3; k++) if (ayni(x, x + k)) m = Math.min(m, izin[x + k] + Math.abs(k) * 4); sinir[x] = m; }
-  const sil = new Int32Array(W);
-  for (let x = 0; x < W; x++) {
-    if (izin[x] < 0) continue;
-    let sum = 0, n = 0; for (let k = -4; k <= 4; k++) if (ayni(x, x + k)) { sum += Math.min(iste[x + k], sinir[x + k]); n++; }
-    sil[x] = Math.round(Math.min(sum / n, sinir[x], izin[x]));
+  // Son temizlik: iki yanından 10-40 px yüksekte kalan ince sivri (≤ 7 px geniş) komşularının seviyesine erir
+  const oy = (x, cy, r) => {
+    for (let yy = cy - r; yy <= cy + r; yy++) for (let xx = x - r; xx <= x + r; xx++) {
+      const dx = (xx - x) / r, dy = (yy - cy) / r;
+      if (dx * dx + dy * dy <= 1 && xx >= 0 && xx < W && yy >= 0 && yy < H) kopya[yy * W + xx] = 0;
+    }
+    out.push(x, cy, r);
+  };
+  const ust = new Int32Array(W); for (let x = 0; x < W; x++) ust[x] = ilk(x, 0);
+  for (let x = 4; x < W - 4; x++) {
+    const hedef = Math.min(ust[x - 4], ust[x + 4]) - 2;
+    if (ust[x] >= bos || hedef >= bos || ust[x] > hedef - 10 || hedef - ust[x] > 40) continue;   // uzun direk/anten sivri sayılmaz
+    let s = x; while (s + 1 < W - 4 && ust[s + 1] < hedef - 4) s++;
+    if (s - x > 6) { x = s; continue; }   // geniş tepe: sivri değil
+    const mx = (x + s) >> 1;
+    for (let yy = ust[x] + 3; yy < hedef; yy += 5) oy(mx, yy, 4);
+    x = s + 3;
   }
-  // Son temizlik: komşularından 4 px'ten fazla sivri kalan tek sütun komşularının seviyesine erir (izin verdiği kadar)
-  for (let tur = 0; tur < 2; tur++) for (let x = 1; x < W - 1; x++) {
-    if (izin[x] < 0 || izin[x - 1] < 0 || izin[x + 1] < 0) continue;
-    const y = top[x] + sil[x], yl = top[x - 1] + sil[x - 1], yr = top[x + 1] + sil[x + 1];
-    if (y < yl - 4 && y < yr - 4) sil[x] = Math.min(izin[x], Math.min(yl, yr) - top[x]);
+  // İki damla arasında kalan tek sütunluk kıl (komşularından 5 px'ten fazla yüksek) de erir
+  for (let x = 1; x < W - 1; x++) ust[x] = ilk(x, 0);
+  for (let x = 1; x < W - 1; x++) {
+    const hedef = Math.min(ust[x - 1], ust[x + 1]);
+    if (ust[x] >= bos || hedef >= bos || ust[x] > hedef - 6 || hedef - ust[x] > 40) continue;
+    for (let yy = ust[x] + 1; yy < hedef + 1; yy += 3) oy(x, yy, 2);
   }
-  for (let x = 0; x < W; x++) if (sil[x] > 0) out.push(x, top[x], sil[x]);
-  return out;
+  return { c: out };
 }
-// d: [x, y, boy, x, y, boy, ...] silinecek dikey şeritler. Host ve misafir aynı aralıkları siler.
+// d: { c: [x, y, r, ...] } damla oyukları (v29.9) ya da eski [x, y, boy, ...] dikey şeritler. Host ve misafir aynısını siler.
 function asitUygula(d) {
-  if (!Array.isArray(d) || !terr) return;
-  // Bütün şeritler tek yol olarak silinir: tek tek silinince yüksek çözünürlüklü arazide (Hurda) şerit birleşimleri
-  // yarım siliniyor, eriyen yerde soluk çizgili bir iz kalıyordu
-  const sil = new Path2D(), cizgi = new Path2D();
-  for (let i = 0; i + 2 < d.length; i += 3) {
-    const x = d[i] | 0, y = d[i + 1] | 0, n = d[i + 2] | 0;
-    if (x < 0 || x >= W || n <= 0) continue;
-    for (let yy = Math.max(0, y); yy < Math.min(H, y + n); yy++) solid[yy * W + x] = 0;
-    sil.rect(x - 0.3, y - 1, 1.6, n + 1); cizgi.rect(x, y + n, 1, 2);   // şeritler biraz bindirilir: arada kıl payı çizgi kalmasın
+  if (!terr || !d) return;
+  if (Array.isArray(d)) {   // eski biçim (sürüm karışık kayıt gelirse)
+    const sil = new Path2D();
+    for (let i = 0; i + 2 < d.length; i += 3) {
+      const x = d[i] | 0, y = d[i + 1] | 0, n = d[i + 2] | 0;
+      if (x < 0 || x >= W || n <= 0) continue;
+      for (let yy = Math.max(0, y); yy < Math.min(H, y + n); yy++) solid[yy * W + x] = 0;
+      sil.rect(x - 0.3, y - 1, 1.6, n + 1);
+    }
+    tctx.save(); tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000'; tctx.fill(sil); tctx.restore();
+    return;
+  }
+  const c = Array.isArray(d.c) ? d.c : [];
+  // Bütün oyuklar tek yolda silinir (tek tek silinince birleşim yerlerinde soluk iz kalıyordu); önce ince yanık kenar
+  const sil = new Path2D(), kenar = new Path2D();
+  for (let i = 0; i + 2 < c.length; i += 3) {
+    const x = +c[i], y = +c[i + 1], r = +c[i + 2];
+    if (!(r > 0)) continue;
+    carveSolid(x, y, r, r);
+    kenar.moveTo(x + r + 2, y); kenar.arc(x, y, r + 2, 0, Math.PI * 2);
+    sil.moveTo(x + r, y); sil.arc(x, y, r, 0, Math.PI * 2);
   }
   tctx.save();
-  tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000'; tctx.fill(sil);
-  tctx.globalCompositeOperation = 'source-atop'; tctx.fillStyle = TEMA.oyuk; tctx.fill(cizgi);   // erimiş yüzey: ince koyu çizgi
+  tctx.globalCompositeOperation = 'source-atop'; tctx.globalAlpha = 0.55; tctx.fillStyle = TEMA.oyuk; tctx.fill(kenar);   // erimiş yüzey: koyu, ince kenar
+  tctx.globalAlpha = 1; tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000'; tctx.fill(sil);
   tctx.restore();
+  if (haritaRastgele) for (let i = 0; i + 2 < c.length; i += 3) HARITA_RASTGELE.cepheOy(+c[i], +c[i + 1], +c[i + 2]);
 }
 function gokAcik(u) { for (let y = Math.floor(u.y - UNIT_H - 2); y >= 0; y--) if (araziKati(u.x, y)) return false; return true; }
 function asitYagdir() {
@@ -1684,6 +1748,13 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['30.0', '26 Kasım 2026', [
+    ['d', 'Asit yağmuru damla damla eritir: yüzey yuvarlak oyuklarla yumuşakça iner, ince dikey yarıklar kalmaz; köprü ve adalar delinmez'],
+    ['d', 'Binaya kendi askerin girince ön cephe tamamen kalkar; rakibin binadaki askeri, adı ve canı görünmez'],
+    ['d', 'Bina girişlerinin önündeki toprak açılır, binaya yürüyerek girilir'],
+    ['d', 'Oyun başında kimse binanın içinde ya da üstünde başlamaz'],
+    ['k', 'Suyun önündeki koyu hurda şeridi kaldırıldı'],
+  ]],
   ['29.9', '26 Kasım 2026', [
     ['y', 'Rastgele haritada binalar: içine girilebilir, içerideyken ön cephe saydamlaşır, patlamalar cepheyi de deler'],
     ['y', 'Rastgele haritaya yeni arka plan: boyalı gökyüzü, uzak ve yakın hurda siluetleri, suyun önünde koyu hurda şeridi'],
@@ -5665,6 +5736,9 @@ function render(t) {
   }
   try { renderIc(t); } finally { for (const [u, x, y] of gizli) { u.x = x; u.y = y; } }
 }
+// Bina cephesi bu cihazda kimin askeri için kalkar: aynı telefonda sırası gelen takım, online'da kendi askerlerim
+const binaBenim = u => mode === 'local' ? u.team === team() : u.team.slot === mySlot;
+const binadaGizli = u => haritaRastgele && !binaBenim(u) && HARITA_RASTGELE.gizli(u);
 function renderIc(t) {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
   const { vw, vh } = viewSize();
@@ -5705,7 +5779,9 @@ function renderIc(t) {
   wfxCiz(true);   // jetpack alevi ve dumanı askerin arkasında
   for (const u of units) if (u.alive && u !== benim) drawUnit(u, false, t);
   if (benim && benim.alive) drawUnit(benim, true, t);
-  if (haritaRastgele) { HARITA_RASTGELE.cepheCiz(ctx, units, Math.min(0.1, Math.max(0, t - (renderIc.son || t)))); renderIc.son = t; }   // bina cepheleri askerlerin önünde
+  if (haritaRastgele) {   // bina cepheleri askerlerin önünde; yalnız kendi askeri içerideyken kalkar (başkasınınki gizli kalır)
+    HARITA_RASTGELE.cepheCiz(ctx, units, Math.min(0.1, Math.max(0, t - (renderIc.son || t))), binaBenim); renderIc.son = t;
+  }
   for (const d of dudukler) { const u = units[d.i]; if (!u) continue; ctx.save(); ctx.translate(u.x + u.facing * 14, u.y - 20); ctx.scale(u.facing, 1); YENI.duduk(ctx); YENI.dudukDalga(ctx, d.t); ctx.restore(); }
   for (const k of kapanlar) if (k.kapali) { ctx.save(); ctx.translate(k.x, k.y + 1); YENI.ayiKapani(ctx, true); ctx.restore(); }
   for (const b of yapiskanlar) {   // yapışkan bombalar askerden sonra (önde) çizilir
@@ -5730,14 +5806,13 @@ function renderIc(t) {
   const [wx0] = toWorld(-40, 0), [wx1] = toWorld(vw + 40, 0);
   drawWater(t, Math.floor(wx0 / 12) * 12, wx1);
   suUstuCiz();   // kabarcıklar ve yüzey dalgaları suyun önünde
-  if (haritaRastgele) HARITA_RASTGELE.onKatman(ctx, cam, wx0, wx1);   // suyun önündeki koyu hurda şeridi
 
   // Ekran-uzayı etiketler: zum ne olursa olsun okunur kalsın
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   const sd = asitSiddet(); if (sd > 0) { ctx.save(); YENI.asitYagmuru(ctx, vw, vh, t, sd, wind * 10); ctx.restore(); }
   ctx.textAlign = 'center'; ctx.lineJoin = 'round';
   for (const u of units) {
-    if (!u.alive) continue;
+    if (!u.alive || binadaGizli(u)) continue;   // binadaki rakibin adı/canı da görünmez
     const [x, y] = toScreen(u.x, u.y - 37);
     ctx.globalAlpha = ETIKET_ALFA;   // v29.6: etiketler küçük ve yarı saydam (arazi ve atışlar görünsün)
     ctx.font = '800 11px Rubik, system-ui, sans-serif';
@@ -5755,7 +5830,7 @@ function renderIc(t) {
       ctx.textAlign = 'center';
     }
   }
-  if (active && active.alive && state === 'aim') {
+  if (active && active.alive && state === 'aim' && !binadaGizli(active)) {
     const [x, y] = toScreen(active.x, active.y - 37);
     const b = Math.abs(Math.sin(t * 5)) * 5, top = active.traitor ? y - 55 : y - 37;
     ctx.fillStyle = '#fff4e6';
