@@ -1674,6 +1674,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['29.6', '26 Kasım 2026', [
+    ['d', 'Asker adı, oyuncu adı ve can yazıları daha küçük ve yarı saydam'],
+  ]],
   ['29.5', '26 Kasım 2026', [
     ['d', 'Harita görünümünde su en alta indi, gökyüzü çok daha fazla görünür'],
   ]],
@@ -4371,6 +4374,7 @@ function applyAct(m, slot, dogrudan) {
 }
 
 // ---- Kamera ----
+const ETIKET_ALFA = 0.75;   // asker adı / can etiketlerinin opaklığı
 const OV_SU = 40;     // harita görünümünde ekranın altında kalan su şeridi (px)
 const OV_GOK = 160;   // harita görünümünde arazinin üstünde bırakılan gökyüzü payı (dünya px)
 const OV_PAD = 120;   // harita görünümünde üst + alt düğme şeritleri (px)
@@ -5685,23 +5689,25 @@ function renderIc(t) {
   for (const u of units) {
     if (!u.alive) continue;
     const [x, y] = toScreen(u.x, u.y - 37);
-    ctx.font = '800 13px Rubik, system-ui, sans-serif';
-    ctx.lineWidth = 3.5; ctx.strokeStyle = 'rgba(20,15,34,.9)'; ctx.strokeText(u.hp, x, y - 4);
-    ctx.fillStyle = u.team.c; ctx.fillText(u.hp, x, y - 4);
-    ctx.font = '600 11px Rubik, system-ui, sans-serif';
-    ctx.strokeText(u.name, x, y - 18); ctx.fillStyle = '#fff4e6'; ctx.fillText(u.name, x, y - 18);
+    ctx.globalAlpha = ETIKET_ALFA;   // v29.6: etiketler küçük ve yarı saydam (arazi ve atışlar görünsün)
+    ctx.font = '800 11px Rubik, system-ui, sans-serif';
+    ctx.lineWidth = 2.8; ctx.strokeStyle = 'rgba(20,15,34,.9)'; ctx.strokeText(u.hp, x, y - 3);
+    ctx.fillStyle = u.team.c; ctx.fillText(u.hp, x, y - 3);
+    ctx.font = '600 9px Rubik, system-ui, sans-serif';
+    ctx.strokeText(u.name, x, y - 15); ctx.fillStyle = '#fff4e6'; ctx.fillText(u.name, x, y - 15);
     // Askerin sahibi olan oyuncunun adı, oyuncunun renginde
-    ctx.font = '800 10px Rubik, system-ui, sans-serif';
-    ctx.strokeText(u.team.name, x, y - 31); ctx.fillStyle = u.team.c; ctx.fillText(u.team.name, x, y - 31);
+    ctx.font = '800 8px Rubik, system-ui, sans-serif';
+    ctx.strokeText(u.team.name, x, y - 26); ctx.fillStyle = u.team.c; ctx.fillText(u.team.name, x, y - 26);
+    ctx.globalAlpha = 1;
     if (u.traitor) {
       // Elle yazılmış kırmızı koli bandı
-      ctx.save(); ctx.translate(x, y - 50); OBJE.hainRozet(ctx); ctx.restore();
+      ctx.save(); ctx.translate(x, y - 43); OBJE.hainRozet(ctx); ctx.restore();
       ctx.textAlign = 'center';
     }
   }
   if (active && active.alive && state === 'aim') {
     const [x, y] = toScreen(active.x, active.y - 37);
-    const b = Math.abs(Math.sin(t * 5)) * 5, top = active.traitor ? y - 62 : y - 44;
+    const b = Math.abs(Math.sin(t * 5)) * 5, top = active.traitor ? y - 55 : y - 37;
     ctx.fillStyle = '#fff4e6';
     ctx.beginPath(); ctx.moveTo(x - 7, top - 10 - b); ctx.lineTo(x + 7, top - 10 - b); ctx.lineTo(x, top - b); ctx.closePath(); ctx.fill();
   }
