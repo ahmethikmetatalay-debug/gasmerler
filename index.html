@@ -1674,6 +1674,9 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['29.5', '26 Kasım 2026', [
+    ['d', 'Harita görünümünde su en alta indi, gökyüzü çok daha fazla görünür'],
+  ]],
   ['29.4', '26 Kasım 2026', [
     ['d', 'Rastgele haritalar daha net: arazi çözünürlüğü sabit Hurda haritası seviyesine çıktı'],
   ]],
@@ -4368,7 +4371,8 @@ function applyAct(m, slot, dogrudan) {
 }
 
 // ---- Kamera ----
-const OV_SU = 95;     // harita görünümünde ekranın altında kalan su şeridi (px)
+const OV_SU = 40;     // harita görünümünde ekranın altında kalan su şeridi (px)
+const OV_GOK = 160;   // harita görünümünde arazinin üstünde bırakılan gökyüzü payı (dünya px)
 const OV_PAD = 120;   // harita görünümünde üst + alt düğme şeritleri (px)
 let mapTop = 0;      // en yüksek toprağın 40 px üstü; genTerrain sonunda hesaplanır
 let gorunum = null;   // karede bir kez ölçülür; frame() başında sıfırlanır
@@ -4378,7 +4382,7 @@ let hadProj = false, pinching = false;
 function updateCam() {
   const { vw, vh } = viewSize();
   // Harita görünümü: arazinin tamamı (havadaki adalar ve su dahil) üst/alt düğmelerin arasına sığar
-  const z = overview ? Math.min(vw / W, (vh - OV_PAD) / (WATER + 25 - mapTop)) : baseZoom() * cam.user;
+  const z = overview ? Math.min(vw / W, (vh - OV_PAD) / (WATER + 25 - mapTop + OV_GOK)) : baseZoom() * cam.user;
   cam.z += (z - cam.z) * (pinching ? 1 : 0.15);
   if (projs.length && !hadProj) cam.free = false;     // atış yapılınca kamera mermiyi takip etmeye döner
   hadProj = projs.length > 0;
