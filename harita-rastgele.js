@@ -20,13 +20,13 @@ const HARITA_RASTGELE = (() => {
     o: { W: 2900, H: 1300, kutle: [2, 3], kat: 2, ada: [2, 3], dekor: 14 },
     b: { W: 3400, H: 1500, kutle: [3, 4], kat: 3, ada: [2, 4], dekor: 18 },
   };
-  const K = 1.25;                  // arazi tuvali ölçeği (parca_derle.py K ile aynı)
+  const K = 1.6;                   // arazi tuvali ölçeği: dünya pikseli başına 1,6 resim pikseli (sabit Hurda 1,67 kadar net); parca_derle.py K ile aynı
   const YOK = 99999;
   const KENAR = 70;                // arazi iki yanda dünyanın en az bu kadar içinde biter
   const ALT = 24, GOMUL = 60;      // taban alt kesiği su çizgisinin ALT..ALT+GOMUL px altında
   const UC = 40;                   // köprü ucu karanın üstüne bu kadar biner
   const TAVAN = 110;               // hiçbir parça bundan yukarı çıkmaz (gökyüzü payı)
-  const SURUM = 5;
+  const SURUM = 6;
   let W = 2900, H = 1300, SU = 1260, ayar = BOYUT.o;
 
   const OLCEKLER = { zemin: [85, 100, 115], ust: [85, 100, 115], yan: [90, 110], ada: [90, 110], kiris: [90, 110, 130], dekor: [90, 110] };
