@@ -631,6 +631,8 @@ const WI = id => WEAPONS.findIndex(w => w.id === id);
 const START_AMMO = WEAPONS.map(w => ({ cluster: 2, goat: 1, portal: 1, shovel: 2, lasso: 1, airstrike: 0, beartrap: 2, jet: 2, revive: 0, tape: 0, whistle: 0, rduck: 0, mduck: 0, dynamite: 2, barricade: 2, swap: 1, drill: 0, guided: 0, sticky: 0, remote: 0 })[w.id] ?? -1);   // -1 = sınırsız; herkes oyuna 1 kementle başlar
 const LASSO_V = 900, LASSO_MAX = 650, LASSO_PULL = 420, LASSO_DMG = 15;   // kement: yerçekimsiz, dümdüz gider; sandığı çeker, rakibi kırbaçlar
 const JET_V = 420, JET_Y = 70, JET_LEAD = 2.6;       // F-16 hedefin üstüne ~2,6 sn'de gelir (ses 5 sn)
+// Rastgele haritada F-16 en yüksek arazinin hemen üstünden uçar (büyük dünyada görünür kalsın); mapTop her telefonda aynı
+const jetY = () => haritaRastgele ? Math.max(JET_Y, mapTop - 30) : JET_Y;
 const ABOMB_N = 5, ABOMB_GAP = 34, ABOMB_DMG = 25, ABOMB_R = 44;
 const SETTLE_SHOT = 2;                               // atıştan sonra kamera vuruş yerinde bu kadar bekler (sn)
 const CRATE_WEAPONS = [WI('cluster'), WI('goat'), WI('portal')];
@@ -656,7 +658,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v293-';
+const ID_PREFIX = 'gasmerler-v294-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1672,6 +1674,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['29.3', '26 Kasım 2026', [
+    ['d', 'Harita görünümünde su altta ince bir şerit kalır, harita aşağı yaslanır; üstte gökyüzüne yer açılır'],
+    ['d', 'Rastgele haritada F-16 en yüksek arazinin hemen üstünden uçar, harita görünümünde görünür'],
+  ]],
   ['29.2', '26 Kasım 2026', [
     ['y', 'Rastgele harita büyüdü ve boyut seçildi: Harita > Küçük / Orta / Büyük (Sabit, elle çizilmiş Hurda Gezegeni olarak kalır)'],
     ['d', 'Rastgele harita W.M.D gibi kurulur: su boşluklarıyla ayrılmış kara kütleleri, üstlerine kat kat hurda yığınları, yamaçlardan kemer çıkıntılar, kütleleri bağlayan köprüler, ulaşılabilir yüzen adalar'],
@@ -2874,7 +2880,7 @@ function callAirstrike() {
   const dir = tx < W / 2 ? -1 : 1;            // uçak hedefin uzak tarafından gelir, haritayı boydan boya geçer
   const drops = [];
   for (let k = 0; k < ABOMB_N; k++) drops.push(tx + (k - (ABOMB_N - 1) / 2) * ABOMB_GAP * dir);
-  addProj({ type: 'jet', x: tx - dir * JET_V * JET_LEAD, y: JET_Y, vx: dir * JET_V, vy: 0, dir, drops, age: 0 });
+  addProj({ type: 'jet', x: tx - dir * JET_V * JET_LEAD, y: jetY(), vx: dir * JET_V, vy: 0, dir, drops, age: 0 });
   jetSesi();
   emit({ t: 'as' });
 }
@@ -4359,6 +4365,7 @@ function applyAct(m, slot, dogrudan) {
 }
 
 // ---- Kamera ----
+const OV_SU = 95;     // harita görünümünde ekranın altında kalan su şeridi (px)
 const OV_PAD = 120;   // harita görünümünde üst + alt düğme şeritleri (px)
 let mapTop = 0;      // en yüksek toprağın 40 px üstü; genTerrain sonunda hesaplanır
 let gorunum = null;   // karede bir kez ölçülür; frame() başında sıfırlanır
@@ -4376,7 +4383,8 @@ function updateCam() {
     let tx = cam.x, ty = cam.y;
     // Uçak bomba bırakana kadar hedefi göster; sonra bombaları takip et
     const fp = projs.find(p => p.type !== 'jet') || projs[0];
-    if (overview) { tx = W / 2; ty = (mapTop + WATER + 25) / 2 + 8 / cam.z; }
+    // Harita görünümü: su altta ince bir şerit kalır (OV_SU ekran px); artan boşluk yukarıya, gökyüzüne gider (F-16 görünsün)
+    if (overview) { tx = W / 2; ty = Math.min((mapTop + WATER + 25) / 2 + 8 / cam.z, WATER + OV_SU / cam.z - vh / 2 / cam.z); }
     else if (fp && fp.type === 'jet' && airTarget) { tx = airTarget.x; ty = (surfaceY(airTarget.x) ?? H / 2) - 90; }
     else if (fp && !(state === 'aim' && kacis && active)) { tx = fp.x; ty = fp.y; }   // kaçarken kamera askerde
     else if (state === 'settle' && camHold) { tx = camHold.x; ty = camHold.y; }
@@ -5478,7 +5486,7 @@ function drawAirTarget(t) {
   const x = hedef.x, gy = surfaceY(x) ?? WATER, pulse = 1 + Math.sin(t * 6) * 0.12;
   ctx.save();
   ctx.strokeStyle = 'rgba(226,70,44,.85)'; ctx.lineWidth = 2; ctx.setLineDash([8, 6]);
-  ctx.beginPath(); ctx.moveTo(x, JET_Y); ctx.lineTo(x, gy); ctx.stroke(); ctx.setLineDash([]);
+  ctx.beginPath(); ctx.moveTo(x, jetY()); ctx.lineTo(x, gy); ctx.stroke(); ctx.setLineDash([]);
   ctx.lineWidth = 2.5; ctx.beginPath(); ctx.arc(x, gy - 4, 14 * pulse, 0, Math.PI * 2); ctx.stroke();
   ctx.beginPath(); ctx.moveTo(x - 8, gy - 12); ctx.lineTo(x + 8, gy + 4); ctx.moveTo(x + 8, gy - 12); ctx.lineTo(x - 8, gy + 4); ctx.stroke();
   ctx.restore();
@@ -6604,7 +6612,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') navigator.se
 if (new URLSearchParams(location.search).has('test')) window.__t = {
   get state() { return state; }, snapshot, get snapSayac() { return snapSayac; }, get turSay() { return turSay; }, get parts() { return parts; }, get pops() { return pops; }, get cizirtilar() { return cizirtilar; }, get nomad() { return nomad; }, get yerSira() { return yerSira; }, yerBul, get timer() { return timer; }, get kacisT() { return kacisT; }, get wfxParca() { return wfxParca; }, get wfxHazir() { return wfxHazir(); }, set wfxMod(v) { wfxMod = !!v; }, wfxCal, blackHole, vfxYap, portalGecisFx, explodeFx, splash, get wind() { return wind; }, set wind(v) { wind = v; }, fallDamage, G, get mySlot() { return mySlot; }, get overview() { return overview; }, get teams() { return teams; }, get units() { return units; }, get active() { return active; },
   get portals() { return portals; }, set portals(v) { portals = v; }, get crates() { return crates; }, get projs() { return projs; }, get moveLeft() { return moveLeft; }, set moveLeft(v) { moveLeft = v; },
-  get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, get H() { return H; }, get WATER() { return WATER; }, WI, collect,
+  get cam() { return cam; }, get mode() { return mode; }, get digLeft() { return digLeft; }, get bubbles() { return bubbles; }, explode, get W() { return W; }, get mapTop() { return mapTop; }, get H() { return H; }, get WATER() { return WATER; }, WI, collect,
   Sound, get airTarget() { return airTarget; }, set airTarget(v) { airTarget = v; }, get settleAll() { return settleAll; }, get camHold() { return camHold; }, isSolid, groundConnected, get aktifHarita() { return aktifHarita; }, get haritaRastgele() { return haritaRastgele; }, HARITA_RASTGELE, get haritaAyna() { return haritaAyna; }, get elektrik() { return elektrik; }, Telsiz, get hizSayisi() { return [...hizlar.values()].filter(h => h.open).length; }, floorsAt, altinRafi, elektrikFx, get solidHash() { let h = 0; for (let i = 0; i < solid.length; i += 7) h = (h * 31 + solid[i]) | 0; return h; },
   get players() { return players; }, get yapiskanlar() { return yapiskanlar; }, get barikatlar() { return barikatlar; }, lootTablosu, get terr() { return terr; }, GASMER, araziOzet, get senkIstek() { return senkIstek; }, carve, get hizlar() { return hizlar; }, spawnCrate, surfaceY, kill, fire, setTimer(v) { timer = v; }, get turnTeam() { return turnTeam; }, set zorlaLoot(v) { zorlaLoot = v; }, get kokular() { return kokular; }, get graves() { return graves; }, get kapanlar() { return kapanlar; }, get kaos() { return kaos; }, benimKaos, kaosBirimim, get kaosKazilar() { return kaosKazilar; }, toScreen, get input() { return input; }, get jetKul() { return jetKul; }, get kaosTur() { return kaosTur; }, get kaosIlan() { return kaosIlan; }, set kaosIlan(v) { kaosIlan = v; }, bantla, get sakinTur() { return sakinTur; }, set sakinTur(v) { sakinTur = v; }, get asitDurum() { return asitDurum; }, get carveLog() { return carveLog; }, nextTurn,
 };
