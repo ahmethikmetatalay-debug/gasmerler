@@ -658,7 +658,7 @@ for (const ev of ['resize', 'orientationchange', 'pageshow', 'focus']) addEventL
 if (window.visualViewport) visualViewport.addEventListener('resize', fitApp);
 document.addEventListener('fullscreenchange', () => setTimeout(fitApp, 200));
 setInterval(fitApp, 1000);   // bazı telefonlarda dönüş olayı geç ya da hiç gelmiyor
-const ID_PREFIX = 'gasmerler-v298-';
+const ID_PREFIX = 'gasmerler-v299-';
 const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 
 // Tohumlu rastgelelik: arazi tohumdan üretilir, böylece her telefon aynı haritayı kendisi çizer
@@ -1107,6 +1107,7 @@ function carve(cx, cy, r, krater) {
   tctx.globalCompositeOperation = 'destination-out'; tctx.fillStyle = '#000';   // silgi tam opak olmalı, yoksa eski arazi soluk kalır
   tctx.beginPath(); tctx.arc(cx, cy, r, 0, Math.PI * 2); tctx.fill();
   tctx.restore();
+  if (haritaRastgele) HARITA_RASTGELE.cepheOy(cx, cy, r);   // bina cephesi de delinir
 }
 // Krater kenarı (yalnız kalan toprağa boyanır, source-atop): içte koyu yanık çizgi, dışa doğru solan kavrulmuş toprak,
 // arada kırıntı lekeleri. Renkler temadan (TEMA.krater: koyu = yanık, yanik = kavrulmuş toprak). Lekeler konumdan
@@ -1683,6 +1684,10 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['29.9', '26 Kasım 2026', [
+    ['y', 'Rastgele haritada binalar: içine girilebilir, içerideyken ön cephe saydamlaşır, patlamalar cepheyi de deler'],
+    ['y', 'Rastgele haritaya yeni arka plan: boyalı gökyüzü, uzak ve yakın hurda siluetleri, suyun önünde koyu hurda şeridi'],
+  ]],
   ['29.8', '26 Kasım 2026', [
     ['d', 'Rastgele haritada köprülerin üstüne süs eşyası konmuyor'],
   ]],
@@ -4456,6 +4461,7 @@ function toWorld(sx, sy) { const { vw, vh } = viewSize(); return [(sx - vw / 2) 
 
 // ---- Çizim ----
 function drawBackdrop(vw, vh, t) {
+  if (haritaRastgele && HARITA_RASTGELE.arkaPlan(ctx, vw, vh, cam)) return;   // v3 boyalı gök + siluetler
   if (HARITA_HURDA_PNG.hazir) return HARITA_HURDA_PNG.arkaPlan(ctx, vw, vh, cam);
   // Hurda resimleri henüz yüklenmedi (açılış/menü): düz gökyüzü geçişi
   const g = ctx.createLinearGradient(0, 0, 0, vh);
@@ -5699,6 +5705,7 @@ function renderIc(t) {
   wfxCiz(true);   // jetpack alevi ve dumanı askerin arkasında
   for (const u of units) if (u.alive && u !== benim) drawUnit(u, false, t);
   if (benim && benim.alive) drawUnit(benim, true, t);
+  if (haritaRastgele) { HARITA_RASTGELE.cepheCiz(ctx, units, Math.min(0.1, Math.max(0, t - (renderIc.son || t)))); renderIc.son = t; }   // bina cepheleri askerlerin önünde
   for (const d of dudukler) { const u = units[d.i]; if (!u) continue; ctx.save(); ctx.translate(u.x + u.facing * 14, u.y - 20); ctx.scale(u.facing, 1); YENI.duduk(ctx); YENI.dudukDalga(ctx, d.t); ctx.restore(); }
   for (const k of kapanlar) if (k.kapali) { ctx.save(); ctx.translate(k.x, k.y + 1); YENI.ayiKapani(ctx, true); ctx.restore(); }
   for (const b of yapiskanlar) {   // yapışkan bombalar askerden sonra (önde) çizilir
@@ -5723,6 +5730,7 @@ function renderIc(t) {
   const [wx0] = toWorld(-40, 0), [wx1] = toWorld(vw + 40, 0);
   drawWater(t, Math.floor(wx0 / 12) * 12, wx1);
   suUstuCiz();   // kabarcıklar ve yüzey dalgaları suyun önünde
+  if (haritaRastgele) HARITA_RASTGELE.onKatman(ctx, cam, wx0, wx1);   // suyun önündeki koyu hurda şeridi
 
   // Ekran-uzayı etiketler: zum ne olursa olsun okunur kalsın
   ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
