@@ -26,7 +26,7 @@ const HARITA_RASTGELE = (() => {
   const ALT = 24, GOMUL = 60;      // taban alt kesiği su çizgisinin ALT..ALT+GOMUL px altında
   const UC = 40;                   // köprü ucu karanın üstüne bu kadar biner
   const TAVAN = 110;               // hiçbir parça bundan yukarı çıkmaz (gökyüzü payı)
-  const SURUM = 6;
+  const SURUM = 7;
   let W = 2900, H = 1300, SU = 1260, ayar = BOYUT.o;
 
   const OLCEKLER = { zemin: [85, 100, 115], ust: [85, 100, 115], yan: [90, 110], ada: [90, 110], kiris: [90, 110, 130], dekor: [90, 110] };
@@ -55,6 +55,41 @@ const HARITA_RASTGELE = (() => {
   const tur = t => PARCA.filter(p => p.tur === t);
   const ZEMIN = tur('zemin'), UST = tur('ust'), YAN = tur('yan'), KIRIS = tur('kiris'), DEKOR = tur('dekor');
   const ADA = PARCA.filter(p => p.tur === 'ada' || /levha|raf/.test(p.ad));   // yassı yığınlar yüzen ada olarak da kullanılır
+
+  // Hafif döndürme (derece): parçalar tek parçaymış gibi otursun, tekrar azalsın. Maske tam sayıyla döner:
+  // ×4096 sabit cos/sin tablosu, >> ile taban bölme (Math.cos tarayıcıdan tarayıcıya bit bit aynı olmayabilir)
+  const TRIG = { '-8': [4056, -570], '-6': [4074, -428], '-4': [4086, -286], '-3': [4090, -214], 0: [4096, 0], 3: [4090, 214], 4: [4086, 286], 6: [4074, 428], 8: [4056, 570] };
+  const ACI = { ust: [-6, -3, 0, 0, 3, 6], ada: [-6, -3, 0, 3, 6], yan: [-3, 0, 3], dekor: [-8, -4, 0, 0, 4, 8] };
+  const donmus = new Map();
+  function dondur(p, aci) {
+    if (!aci) return p;
+    const anahtar = p.ad + '|' + p.olcek + '|' + aci;
+    if (donmus.has(anahtar)) return donmus.get(anahtar);
+    const [C, S] = TRIG[aci], AS = Math.abs(S);
+    const w2 = ((p.w * C + p.h * AS) >> 12) + 3, h2 = ((p.w * AS + p.h * C) >> 12) + 3;
+    const cx = p.w >> 1, cy = p.h >> 1, cx2 = w2 >> 1, cy2 = h2 >> 1;
+    const kaynak = new Uint8Array(p.w * p.h);
+    p.satir.forEach((v, y) => { for (let i = 0; i < v.length; i += 2) kaynak.fill(1, y * p.w + v[i], y * p.w + v[i] + v[i + 1]); });
+    const satir = [];
+    for (let y = 0; y < h2; y++) {
+      const o = []; let bas = -1;
+      for (let x = 0; x <= w2; x++) {
+        let dolu = 0;
+        if (x < w2) {   // hedef pikselden kaynağa ters döndürme
+          const dx = x - cx2, dy = y - cy2;
+          const sx = ((dx * C + dy * S) >> 12) + cx, sy = ((dy * C - dx * S) >> 12) + cy;
+          dolu = sx >= 0 && sx < p.w && sy >= 0 && sy < p.h ? kaynak[sy * p.w + sx] : 0;
+        }
+        if (dolu && bas < 0) bas = x; else if (!dolu && bas >= 0) { o.push(bas, x - bas); bas = -1; }
+      }
+      satir.push(o);
+    }
+    const q = { ad: p.ad, tur: p.tur, olcek: p.olcek, w: w2, h: h2, satir, aci, ow: p.w, oh: p.h, cx, cy, cx2, cy2 };
+    Object.assign(q, profil(q, satir));
+    q.tepe = q.ust.reduce((m, v) => v >= 0 ? Math.min(m, v) : m, 99999);
+    donmus.set(anahtar, q);
+    return q;
+  }
 
   const img = {};
   let yukleniyor = null, hazir = false, plan = [], ekler = [];
@@ -160,7 +195,7 @@ const HARITA_RASTGELE = (() => {
     // ---- 2. Kat kat yığma: üst parçalar yüzeye oturur (alt profili yüzeye değer, biraz gömülür)
     const ustler = [];
     function yigKoy(k, kat) {
-      const q = sec(UST), ayna = r() < 0.5, aday = [];
+      const q = dondur(sec(UST), sec(ACI.ust)), ayna = r() < 0.5, aday = [];
       const m0 = Math.floor(q.w * 0.2), m1 = q.w - m0, gom = Math.floor(q.h * 0.22);
       for (let x = k.L - 20; x + q.w <= k.R + 20; x += 8) {
         if (x < KENAR || x + q.w > W - KENAR) continue;
@@ -239,7 +274,7 @@ const HARITA_RASTGELE = (() => {
     // ---- 4. Yamaç kemerleri: çizimde ayak sağda; sol yamaçta olduğu gibi, sağ yamaçta aynalı
     for (const k of kutleler) {
       if (r() > 0.6) continue;
-      const q = sec(YAN), aday = [], gom = Math.floor(q.w * 0.3);
+      const q = dondur(sec(YAN), sec(ACI.yan)), aday = [], gom = Math.floor(q.w * 0.3);
       for (const sag of [false, true]) for (let yt = TAVAN + 40; yt + q.h <= SU - 120; yt += 8) {
         let duvar = null;   // bu satırda kütlenin en dış katı sütunu
         const sy = (yt + 20) * W;
@@ -267,7 +302,7 @@ const HARITA_RASTGELE = (() => {
     let adaSay = 0;
     for (const tp of karistir(hedefler)) {
       if (adaSay >= adaHedef) break;
-      const q = sec(ADA), aday = [];
+      const q = dondur(sec(ADA), sec(ACI.ada)), aday = [];
       for (let d = tp.su ? 0 : 140; d <= (tp.su ? 60 : 300); d += 10) for (const yon of [-1, 1]) for (let dy = 50; dy <= 190; dy += 10) {
         const ix = tp.su ? tp.x - (q.w >> 1) + yon * d : yon > 0 ? tp.x + d : tp.x - d - q.w;
         const io = { p: q, x: ix, y: tp.y - dy, ayna: r() < 0.5 };
@@ -279,7 +314,7 @@ const HARITA_RASTGELE = (() => {
     // ---- 6. Dekor: düz yüzeylere katı hurda eşyalar (birbirinden ve köprü uçlarından uzak)
     const konan = [], dekorlar = karistir(DEKOR);
     for (let i = 0, dene = 0; konan.length < ayar.dekor && dene < ayar.dekor * 150; dene++) {
-      const q = dekorlar[(i + dene) % dekorlar.length], ayna = r() < 0.5;
+      const q = dondur(dekorlar[(i + dene) % dekorlar.length], sec(ACI.dekor)), ayna = r() < 0.5;
       const x = KENAR + Math.floor(r() * (W - 2 * KENAR - q.w));
       let en = YOK, eb = 0;
       for (let c = 0; c < q.w; c++) { const t = Tz(x + c); en = Math.min(en, t); eb = Math.max(eb, t); }
@@ -299,10 +334,24 @@ const HARITA_RASTGELE = (() => {
     const cv = document.createElement('canvas');
     cv.width = Math.round(W * K); cv.height = Math.round(H * K);
     const c = cv.getContext('2d');
-    for (const o of plan) {
-      const im = img[o.p.ad], w = o.p.w * K, h = o.p.h * K;
-      c.save(); c.translate(o.x * K + (o.ayna ? w : 0), o.y * K); if (o.ayna) c.scale(-1, 1);
-      c.drawImage(im, 0, 0, w, h); c.restore();
+    // Katman: köprü (uçları karanın arkasına girer) → yığın ve kemer (gömülü altları üstüne oturdukları kayanın
+    // kenarıyla örtülür; sonra konan daha arkada) → taban → ada → dekor
+    const KATMAN = { kiris: 0, ust: 1, yan: 1, zemin: 2, ada: 3, dekor: 4 };
+    const sira = plan.map((o, i) => [o, i]).sort((a, b) => (KATMAN[a[0].p.tur] - KATMAN[b[0].p.tur]) || (KATMAN[a[0].p.tur] === 1 ? b[1] - a[1] : a[1] - b[1]));
+    for (const [o] of sira) {
+      const im = img[o.p.ad], p = o.p;
+      c.save();
+      if (p.aci) {   // döndürülmüş parça: maskeyle aynı merkez (cx2, cy2) etrafında
+        c.translate((o.x + (o.ayna ? p.w - p.cx2 : p.cx2)) * K, (o.y + p.cy2) * K);
+        if (o.ayna) c.scale(-1, 1);
+        c.rotate(p.aci * Math.PI / 180);
+        c.drawImage(im, -p.cx * K, -p.cy * K, p.ow * K, p.oh * K);
+      } else {
+        const w = p.w * K, h = p.h * K;
+        c.translate(o.x * K + (o.ayna ? w : 0), o.y * K); if (o.ayna) c.scale(-1, 1);
+        c.drawImage(im, 0, 0, w, h);
+      }
+      c.restore();
     }
     c.setTransform(K, 0, 0, K, 0, 0);
     return { terr: cv, tctx: c };
