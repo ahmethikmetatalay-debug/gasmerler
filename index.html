@@ -21,6 +21,8 @@
 <script src="harita-hurda-gezegeni.js"></script>
 <script src="harita-parcalar-veri.js"></script>
 <script src="harita-rastgele.js"></script>
+<script src="karakter-gasmer-veri.js"></script>
+<script src="karakter-gasmer.js"></script>
 <style>
 /* Layout: full-bleed canvas battlefield at dusk; HUD chips float on the safe-area edges, thumb controls in the bottom corners */
 :root{
@@ -614,7 +616,7 @@ const WEAPONS = [
   { id: 'shovel', name: 'Kürek', desc: 'Herkes 2 tane ile başlar, sandıktan da çıkar. Oklarla nişan yönüne tünel kaz' },
   { id: 'lasso', name: 'Kement', desc: 'Sandıktan çıkar, tek kullanımlık. Dümdüz giden iple uzaktaki sandığı çeker' },
   { id: 'airstrike', name: 'Hele İki Gözüm', desc: 'Gömülü altın sandıktan çıkar. Haritada hedefe dokun, F-16 bombalasın (bomba başı 25 hasar, bir askere en çok 60)' },
-  { id: 'jet', name: 'Sprey Jet', desc: 'Zıpla tuşunu basılı tut, uç. Sağ/sol ile yön ver. 3 sn yakıt, turu bitirmez' },
+  { id: 'jet', name: 'Tüp Jet', desc: 'Zıpla tuşunu basılı tut, uç. Sağ/sol ile yön ver. 3 sn yakıt, turu bitirmez' },
   { id: 'revive', name: 'Diriltme', desc: 'Mezarın dibinde ATEŞ: o asker 30 canla geri döner. Ardından atış yapılabilir' },
   { id: 'tape', name: 'Koli Bandı', desc: 'Silahları birbirine bantla: Roketli Ördek ya da Misketli Ördek' },
   { id: 'rduck', name: 'Roketli Ördek', desc: 'Bazuka gibi uçar, indiği yerde yürür. Tekrar ATEŞ ile patlat' },
@@ -622,7 +624,7 @@ const WEAPONS = [
   { id: 'dynamite', name: 'Dinamit', desc: 'Önüne bırakılır, fitili 5 saniyede yanar, büyük patlama (49 hasar). Bıraktıktan sonra kaç' },
   { id: 'barricade', name: 'Barikat', desc: 'İnşaat demiri: haritada bir yere dokun, sağ/sol ile döndür, ATEŞ ile kur. Havada durur. Turu bitirmez' },
   { id: 'drill', name: 'Delici Roket', desc: 'Bazuka gibi atılır; toprağa girince patlamaz, ~3 asker boyu tünel açar, sonra patlar' },
-  { id: 'guided', name: 'Güdümlü Roket', desc: 'Bazuka gibi fırlatılır; havada 0,7 sn sonra güdüm devreye girer, yavaşlar ve 6 sn Sprey Jet gibi yönlendirilir: sağ/sol o yöne iter, zıpla yukarı kaldırır' },
+  { id: 'guided', name: 'Güdümlü Roket', desc: 'Bazuka gibi fırlatılır; havada 0,7 sn sonra güdüm devreye girer, yavaşlar ve 6 sn Tüp Jet gibi yönlendirilir: sağ/sol o yöne iter, zıpla yukarı kaldırır' },
   { id: 'sticky', name: 'Yapışkan Bomba', desc: 'İlk değdiği askere ya da yere yapışır. İstediğin turda Patlat ile patlatırsın' },
   { id: 'remote', name: 'Patlat', desc: 'Yapışkan bombanı patlat (tur biter)' },
   { id: 'swap', name: 'Asker Değiştir', desc: 'Haritada askerine dokun ya da ATEŞ ile sıradaki askerine geç. Turu bitirmez' },
@@ -1748,6 +1750,13 @@ const statSatir = x => [x.dmg, x.ff, x.kills, x.lost, x.crates, x.best, x.imkans
 
 // ---- Yama notları: her sürümde ne eklendi (y), değişti (d), kaldırıldı (k). Yeni sürümde en üste ekle ----
 const YAMA = [
+  ['30.2', '27 Kasım 2026', [
+    ['y', 'Gaşmerler yeni çizimlerle: bekleme, yürüme, havada, nişan, yumruk ve acı pozları; silahlar elde görünür'],
+    ['y', 'Mermiler yeni çizimlerle: roketler, konserve el bombası, misket kavanozu, dinamit, ördekler, yapışkan bomba, akü'],
+    ['y', 'Silah menüsünde yeni ikonlar'],
+    ['d', 'Sprey Jet artık Tüp Jet: sırtta tüp, alev zerreleri, yanında küçük yakıt çubuğu'],
+    ['d', 'Barikat düz bir PVC boru olarak çizilir'],
+  ]],
   ['30.1', '26 Kasım 2026', [
     ['k', 'Binaların koyu arka duvarı kaldırıldı: içeri girince iskeletin arkasından gökyüzü görünür'],
   ]],
@@ -2258,6 +2267,15 @@ function barikatKur(u, t) {
   return true;
 }
 function barikatCiz(b, hayal, c = ctx) {
+  const egikY = (b.vurus || 0) >= 2, adY = egikY ? 's-barikat-hasar' : 's-barikat';
+  if (gasmerYeni() && GASMER_YENI.var(adY)) {   // v30.2: tek düz PVC boru
+    c.save(); c.translate(b.x, b.y); c.rotate(b.a);
+    if (hayal) c.globalAlpha = 0.55;
+    const kirmizi = hayal && barikatEngel(b);
+    c.scale(1, (BARIKAT_K * 1.45) / ((BARIKAT_L + 4) / 4.9));   // boru kalınlığı çarpışma kalınlığına yakın
+    GASMER_YENI.resim(c, adY, BARIKAT_L + 4, { boya: kirmizi ? '#ff3b2b' : undefined });
+    c.restore(); return;
+  }
   c.save(); c.translate(b.x, b.y); c.rotate(b.a);
   const L = BARIKAT_L, K = BARIKAT_K, egik = (b.vurus || 0) >= 2;
   if (hayal) c.globalAlpha = 0.5;
@@ -2655,7 +2673,7 @@ const CRATE_LOOT_HURDA = [['hp', 11.5], ['weapon', 13.5], ['shield', 9], ['bos',
 const lootTablosu = () => CRATE_LOOT_HURDA;
 let zorlaLoot = null, kokular = [];
 function kokuFx(x, y) { kokular.push({ x, y, t: 0 }); Sound.sample('fart'); }
-const ESYA_LOOT = { jet: ['Sprey Jet', '#8fd3ff'], tape: ['Koli Bandı', '#d9b86a'], revive: ['Diriltme', '#9fe8ff'], airstrike: ['Hele İki Gözüm', '#ffcb3d'] };
+const ESYA_LOOT = { jet: ['Tüp Jet', '#8fd3ff'], tape: ['Koli Bandı', '#d9b86a'], revive: ['Diriltme', '#9fe8ff'], airstrike: ['Hele İki Gözüm', '#ffcb3d'] };
 function collect(c, u) {
   c.dead = true;
   u.team.crates++;
@@ -3208,7 +3226,11 @@ function fitilAdim(dt) {
     p._fk = (p._fk || 0) + dt * (p.fuse < 1.5 ? 40 : 20);
     // fitilin ucu: dinamit dönmeden (6,5; −20), konserve x ile dönerek (3; −10,8) çiziliyor (drawProjectile)
     let ux, uy;
-    if (p.type === 'dynamite') { ux = p.x + 6.5; uy = p.y - 20; }
+    if (gasmerYeni() && GASMER_YENI.var(MERMI_AD[p.type])) {   // v30.2: yeni resmin fitil ucu (drawProjectile ile aynı dönüş)
+      const ad = MERMI_AD[p.type], [w, h] = GASMER_YENI.boyut(ad, MERMI_BOY[p.type]), [fx, fy] = FITIL_UCU[p.type];
+      const lx = (fx - 0.5) * w, ly = (fy - 0.5) * h, r = p.type === 'dynamite' ? DINAMIT_DON() : p.x * 0.12, c = Math.cos(r), sn = Math.sin(r);
+      ux = p.x + lx * c - ly * sn; uy = p.y + lx * sn + ly * c;
+    } else if (p.type === 'dynamite') { ux = p.x + 6.5; uy = p.y - 20; }
     else { const r = p.x * 0.12, c = Math.cos(r), sn = Math.sin(r); ux = p.x + 3 * c + 10.8 * sn; uy = p.y + 3 * sn - 10.8 * c; }
     while (p._fk >= 1) {
       p._fk--;
@@ -5388,24 +5410,44 @@ const LINK_L = 44, LINK_K = 7, LINK_BOSLUK = 1.2, LINK_KALIN = 1.3;
 const LINK_P = 7, LINK_PARLA = 30;   // resmin kenar payı (yerel birim) ve kırmızı parlamanın bulanıklığı (resim pikseli)
 const linkResim = {};
 // Halka karakterin silüetinden çıkar; silüet yalnız bakış yönüne bağlı, o yüzden iki resim yeter (sağa / sola)
+// Karakter çizimi: resimli Gaşmer (GASMER_YENI) hazırsa o, değilse eski kod çizimi. o: GASMER.draw seçenekleri (+ yeni poz alanları)
+const gasmerYeni = () => !!(window.GASMER_YENI && GASMER_YENI.hazir);
+function gasmerCiz(c, o) {
+  if (gasmerYeni()) return GASMER_YENI.ciz(c, Object.assign({ poz: 'bekle', t: 0 }, o));
+  GASMER.draw(c, o);
+}
 function linkResmi(yon) {
-  if (linkResim[yon]) return linkResim[yon];
+  const anahtar = yon + (gasmerYeni() ? 'y' : '');   // yeni karakter gelince silüet yeniden çıkarılır
+  if (linkResim[anahtar]) return linkResim[anahtar];
   const n = LINK_L * LINK_K, mk = m => { const c = document.createElement('canvas'); c.width = c.height = m; return c; };
   const sil = mk(n), hare = mk(n), out = mk((LINK_L + 2 * LINK_P) * LINK_K);
   const sx = sil.getContext('2d'), hx = hare.getContext('2d'), ox = out.getContext('2d');
-  sx.setTransform(LINK_K, 0, 0, LINK_K, n / 2, n * 0.74); GASMER.draw(sx, { x: 0, y: 0.5, boy: UNIT_DRAW_H, renk: '#000', yon });
+  sx.setTransform(LINK_K, 0, 0, LINK_K, n / 2, n * 0.74); gasmerCiz(sx, { x: 0, y: 0.5, boy: UNIT_DRAW_H, renk: '#000', yon });
   const buyut = (r) => { for (let i = 0; i < 16; i++) { const a = i / 16 * Math.PI * 2; hx.drawImage(sil, Math.cos(a) * r * LINK_K, Math.sin(a) * r * LINK_K); } };
   buyut(LINK_BOSLUK + LINK_KALIN);
   hx.globalCompositeOperation = 'source-in'; hx.fillStyle = '#ff2a2a'; hx.fillRect(0, 0, n, n);
   hx.globalCompositeOperation = 'destination-out'; buyut(LINK_BOSLUK); hx.drawImage(sil, 0, 0);
   ox.shadowColor = '#ff1a1a'; ox.shadowBlur = LINK_PARLA; ox.drawImage(hare, LINK_P * LINK_K, LINK_P * LINK_K);
-  return (linkResim[yon] = out);
+  return (linkResim[anahtar] = out);
 }
 function linkHare(gop, t) {
   const L = LINK_L + 2 * LINK_P;
   ctx.save(); ctx.globalAlpha = 0.7 + 0.3 * Math.sin(t * 7);   // nabız
   ctx.drawImage(linkResmi(gop.yon), -LINK_L / 2 - LINK_P, -LINK_L * 0.74 - LINK_P, L, L);
   ctx.restore();
+}
+// Askerin hareketini konum geçmişinden çıkarır (host da misafir de aynı yoldan; grounded/vy misafire gelmez)
+function gasmerHareket(u, t) {
+  const dt = Math.max(1 / 240, Math.min(0.1, t - (u._gT ?? t - 1 / 60)));
+  const dx = u._gX === undefined ? 0 : u.x - u._gX, dy = u._gY === undefined ? 0 : u.y - u._gY;
+  u._gX = u.x; u._gY = u.y; u._gT = t;
+  const yerde = isSolid(u.x, u.y + 2) || isSolid(u.x, u.y + 3) || isSolid(u.x - 3, u.y + 2) || isSolid(u.x + 3, u.y + 2);
+  if (yerde) u._gYer = t;
+  const hava = t - (u._gYer ?? t) > 0.08;              // kısa boşluklarda (yokuş, basamak) havaya geçmez
+  if (!hava && Math.abs(dx) > 0.03) u._gYuru = t + 0.15;
+  const vy = dy / dt, hedef = Math.max(0, Math.min(1, 0.5 + vy / 500));   // −250 px/s yükseliş → 0, +250 düşüş → 1
+  u._gK = u._gK === undefined ? hedef : u._gK + (hedef - u._gK) * Math.min(1, dt * 8);
+  return { hava, yuru: !hava && t < (u._gYuru || 0), k: u._gK };
 }
 function drawUnit(u, isActive, t) {
   const kb = state === 'kaos' && isActive ? benimKaos() : null;
@@ -5480,11 +5522,36 @@ function drawUnit(u, isActive, t) {
   u._hp = u.hp;
   const gop = { x: 0, y: 0.5, boy: UNIT_DRAW_H, renk: tm.c, yon: f, hain: u.traitor, yuz: t < (u._aci || 0) ? 'aci' : undefined };
   if (u.link) linkHare(gop, t);   // link kötü bir şey: karakterin şeklini izleyen, aradan boşluklu kırmızı hare
-  GASMER.draw(ctx, gop);
-  silah();
-  // Sprey Jet sırtta: seçiliyken ya da uçarken. Ölçüler dünya pikseli, yerel ölçekten geri çevrilir
+  // Sprey Jet / Tüp Jet sırtta: seçiliyken ya da uçarken
   const jk = kaosKat(u), jKul = jk ? kjk(jk) && (state !== 'kaos' || u === kaosBirimim()) : isActive && jetKul;   // başkasının jeti görünmez
-  if (jKul || (aiming && wid === 'jet')) {
+  if (gasmerYeni()) {
+    // v30.2 resimli karakter: poz asker durumundan (her cihaz kendi konum geçmişinden çıkarır; ağdan bir şey gitmez)
+    const itki = jk ? kji(jk) : jetItki, jetVar = jKul || (aiming && wid === 'jet');
+    const remoteElde = !aiming && u.team === team() && projs.some(p => p.type === 'patlat' && p.atan === units.indexOf(u));
+    const go = Object.assign(gop, { t: t + (u._faz ?? (u._faz = Math.random() * 7)), faz: (u._faz % 1), jet: jetVar ? (jKul && itki ? 2 : 1) : 0, silah: wid });
+    const hareket = gasmerHareket(u, t);
+    // öncelik: yumruk atışı > acı > havada > yürüme > nişan (silah elde) > bekleme; yürürken/havada silah elden iner
+    if (punching) Object.assign(go, { poz: 'yumruk', silah: 'punch', vurus: Math.sin((1 - u.punchT / 0.3) * Math.PI) });
+    else if (t < (u._aci || 0)) Object.assign(go, { poz: 'aci', acit: 0.55 - ((u._aci || 0) - t) });
+    else if (hareket.hava) Object.assign(go, { poz: 'hava', hava: hareket.k });
+    else if (hareket.yuru) go.poz = 'yuru';
+    else if (aiming && wid === 'punch') Object.assign(go, { poz: 'yumruk', silah: 'punch', vurus: 0 });
+    else if ((aiming && GASMER_YENI.silahVar(wid)) || remoteElde) Object.assign(go, { poz: 'nisan', aci: u.aim, silah: remoteElde ? 'remote' : wid });
+    else go.poz = 'bekle';
+    GASMER_YENI.ciz(ctx, go); u._gPoz = go.poz;   // _gPoz: test için son çizilen poz
+    if (aiming && go.poz === 'bekle' && !GASMER_YENI.silahVar(wid) && !['punch', 'jet', 'barricade', 'swap'].includes(wid)) silah();   // yeni çizimi olmayan silah: eski çizim
+    if (jKul) {   // tüpün yanında küçük yakıt çubuğu
+      const yakit = (jk ? kjy(jk) : jetYakit) / JET_YAKIT;
+      ctx.save(); ctx.scale(f / UNIT_SCALE, 1 / UNIT_SCALE);
+      ctx.fillStyle = 'rgba(6,3,3,.6)'; ctx.fillRect(-27, -26, 3, 15);
+      const h = 14 * Math.max(0, Math.min(1, yakit)); ctx.fillStyle = yakit > 0.25 ? '#8fe36b' : '#ff4d5e'; ctx.fillRect(-26.5, -11.5 - h, 2, h);
+      ctx.restore();
+    }
+  } else {
+    GASMER.draw(ctx, gop);
+    silah();
+  }
+  if (!gasmerYeni() && (jKul || (aiming && wid === 'jet'))) {
     const itki = jk ? kji(jk) : jetItki, yakit = jk ? kjy(jk) : jetYakit;
     ctx.save(); ctx.scale(f, 1); ctx.translate(-11 / UNIT_SCALE, -17 / UNIT_SCALE); ctx.scale(0.66 / UNIT_SCALE, 0.66 / UNIT_SCALE);
     YENI.spreyJet(ctx, t, itki ? 1 : 0, jKul ? yakit / JET_YAKIT : undefined); ctx.restore();
@@ -5515,8 +5582,48 @@ function rocketSmoke(p) {
   parts.push({ kind: 'ates', x: p.x - p.vx / v * 8, y: p.y - p.vy / v * 8, vx: -p.vx / v * 40, vy: -p.vy / v * 40, g: 0, size: rnd(2.2, 3.6), life: rnd(0.08, 0.14), max: 0.14 });
 }
 
+// v30.2: mermiler yeni çizimlerle (GASMER_YENI.resim). Döner: çizdiyse true. Fitil uçları FITIL_UCU (kıvılcım için)
+const MERMI_BOY = { rocket: 28, drill: 30, guided: 32, grenade: 17, cluster: 17, frag: 6, sticky: 14, goat: 22, rduck: 26, rduckY: 24, mduck: 24, dynamite: 22, dirilt: 15 };
+const MERMI_AD = { rocket: 's-roket', drill: 's-delici', guided: 's-gudumlu', grenade: 's-konserve', cluster: 's-kavanoz', frag: 's-misket', sticky: 's-yapiskan',
+  goat: 's-deliordek', rduck: 's-roketliordek', rduckY: 's-roketliordek', mduck: 's-misketliordek', dynamite: 's-dinamit', dirilt: 's-aku' };
+const FITIL_UCU = { dynamite: [0.94, 0.03], grenade: [0.89, 0.13] };   // resim kesri
+const DINAMIT_DON = () => -Math.PI / 2 - GASMER_YENI.eksen('s-dinamit');   // dinamit çubuğu dik durur
+function mermiYeni(p, t) {
+  const ad = MERMI_AD[p.type];
+  if (!ad || !GASMER_YENI.var(ad)) return false;
+  const boy = MERMI_BOY[p.type], G = GASMER_YENI;
+  if (p.type === 'rocket' || p.type === 'drill' || p.type === 'guided') {
+    const a = Math.atan2(p.vy, p.vx);
+    ctx.save(); ctx.rotate(a); if (Math.cos(a) < 0) ctx.scale(1, -1); ctx.rotate(-G.eksen(ad));   // burun gidiş yönünde, etiket dik
+    G.resim(ctx, ad, boy); ctx.restore();
+    if (p.type === 'guided' && p.yakit !== undefined && p.yakit > 0 && !(p.gecikme > 0)) {   // yakıt çubuğu dönmeden üstte
+      const k = p.yakit / GUDUM_YAKIT; ctx.fillStyle = 'rgba(6,3,3,.6)'; ctx.fillRect(-7, -15, 14, 2.4);
+      ctx.fillStyle = k > 0.25 ? '#8fe36b' : '#ff4d5e'; ctx.fillRect(-6.6, -14.6, 13.2 * k, 1.6);
+    }
+  } else if (p.type === 'grenade' || p.type === 'cluster' || p.type === 'frag' || p.type === 'sticky') {
+    ctx.rotate(p.x * (p.type === 'frag' ? 0.2 : p.type === 'sticky' ? 0.1 : 0.12));
+    G.resim(ctx, ad, boy);
+  } else if (p.type === 'dynamite') {
+    ctx.rotate(DINAMIT_DON()); G.resim(ctx, ad, boy);
+  } else if (p.type === 'rduck') {   // uçan roketli ördek: burnu gidiş yönünde
+    const d = p.vx < 0 ? -1 : 1;
+    ctx.scale(d, 1); ctx.rotate(Math.atan2(p.vy, Math.abs(p.vx) || 0.001) * 0.6);
+    G.resim(ctx, ad, boy);
+  } else if (p.type === 'goat' || p.type === 'rduckY' || p.type === 'mduck') {   // yürüyen ördekler: paytak sekme, son 2 sn kırmızı yanıp söner
+    const d = p.dir < 0 ? -1 : 1, sek = p.grounded ? Math.abs(Math.sin(t * 14)) * 1.6 : 0;
+    ctx.scale(d, 1); ctx.translate(0, -sek); ctx.rotate(p.grounded ? Math.sin(t * 14) * 0.08 : 0);
+    const uyari = p.fuse < 2 && Math.floor(t * 8) % 2 === 1;
+    G.resim(ctx, ad, boy, { alt: true, boya: uyari ? '#ff6a5a' : undefined });
+  } else if (p.type === 'dirilt') {   // akü yerde, maşalı kablodan mezara elektrik arkı
+    const d = p.vx < p.x ? -1 : 1;
+    ctx.save(); ctx.scale(d, 1); G.resim(ctx, ad, boy, { alt: true }); ctx.restore();
+    YENI.elektrik(ctx, d * 9, -8, p.vx - p.x, p.vy - p.y, t);
+  } else return false;
+  return true;
+}
 function drawProjectile(p, t) {
   ctx.save(); ctx.translate(p.x, p.y);
+  if (gasmerYeni() && mermiYeni(p, t)) { ctx.restore(); return; }
   if (p.type === 'rocket') {
     // Ters pet şişe: şişenin dibi önde, kapak arkada; arkasından duman çıkar
     ctx.rotate(Math.atan2(p.vy, p.vx));
@@ -5791,7 +5898,12 @@ function renderIc(t) {
     const u = b.hedef !== null ? units[b.hedef] : null, hizli = projs.some(p => p.type === 'patlat' && p.bomba === b) || projs.some(p => p.type === 'patlat' && Math.hypot(p.x - b.x, p.y - b.y) < 2);
     ctx.save();
     if (u && u.alive) { ctx.translate(u.x + 4 * u.facing, u.y - 7); ctx.scale(0.75, 0.75); } else { ctx.translate(b.x, b.y); ctx.scale(0.75, 0.75); }
-    TARIF_CIZ.yapiskanBomba(ctx, hizli ? t * 6 : t, true); ctx.restore();
+    if (gasmerYeni() && GASMER_YENI.var('s-yapiskan')) {
+      ctx.scale(1 / 0.75, 1 / 0.75);
+      const nokta = GASMER_YENI.resim(ctx, 's-yapiskan', MERMI_BOY.sticky), [lx, ly] = nokta(0.5, 0.06);
+      if (Math.sin((hizli ? t * 6 : t) * 9) > 0) { ctx.fillStyle = 'rgba(255,60,40,.55)'; ctx.beginPath(); ctx.arc(lx, ly, 2.6, 0, Math.PI * 2); ctx.fill(); }   // yanıp sönen ışık
+    } else TARIF_CIZ.yapiskanBomba(ctx, hizli ? t * 6 : t, true);
+    ctx.restore();
   }
   drawZaplar();
   for (const p of projs) drawProjectile(p, t);
@@ -5896,7 +6008,8 @@ function updateFx(dt) {
   const ucanlar = kaosTur && kaos ? kaos.list.filter(kji).map(k => units[k.ui]).filter(u => u && u.alive && (state !== 'kaos' || u === kaosBirimim())) : jetItki && active && active.alive ? [active] : [];
   for (const ju of ucanlar) {   // Sprey Jet: eski sprey zerreleri (v28.1'de W.M.D jetpack alevinden geri dönüldü)
     const f = ju.facing, bx = ju.x - f * 10, by = ju.y - 10;
-    for (let i = 0; i < 2; i++) parts.push({ kind: 'spark', c: YENI.SPREY_RENK[i] + '0.8)', x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 40, g: -20, size: 2 + Math.random() * 2.5, life: 0.22, max: 0.22 });
+    const renk = gasmerYeni() ? ['rgba(255,140,40,', 'rgba(255,214,90,'] : YENI.SPREY_RENK;   // v30.2 tüp: alev zerreleri
+    for (let i = 0; i < 2; i++) parts.push({ kind: 'spark', c: renk[i] + '0.8)', x: bx + (Math.random() - 0.5) * 6, y: by, vx: (Math.random() - 0.5) * 30, vy: 50 + Math.random() * 40, g: -20, size: 2 + Math.random() * 2.5, life: 0.22, max: 0.22 });
   }
   if (ucanlar.length && inGameState()) {
     if (Sound.spreyHazir) Sound.sprey(true);
@@ -6102,7 +6215,7 @@ const TARIF = {
   rduck: { ad: 'Roketli Ördek', harca: ['tape', 'goat'], yazi: 'Bant + Deli Ördek' },
   mduck: { ad: 'Misketli Ördek', harca: ['tape', 'goat', 'cluster'], yazi: 'Bant + Deli Ördek + Misket' },
   drill: { ad: 'Delici Roket', harca: ['tape', 'shovel'], yazi: 'Bant + Bazuka + Kürek' },
-  guided: { ad: 'Güdümlü Roket', harca: ['tape', 'jet'], yazi: 'Bant + Bazuka + Sprey Jet' },
+  guided: { ad: 'Güdümlü Roket', harca: ['tape', 'jet'], yazi: 'Bant + Bazuka + Tüp Jet' },
   sticky: { ad: 'Yapışkan Bomba', harca: ['tape', 'revive'], yazi: 'Bant + El Bombası + Diriltme (akü)' },
 };
 const tarifHazir = (t, r) => TARIF[r].harca.every(k => t.ammo[WI(k)] !== 0);
@@ -6228,6 +6341,7 @@ function silahIkon(id) {
   cv.width = cv.height = S * dpr; cv.className = 'wico'; cv.setAttribute('aria-hidden', 'true');
   const c = cv.getContext('2d'); c.scale(dpr, dpr);
   const at = (x, y, s, r, fn) => { c.save(); c.translate(x, y); if (r) c.rotate(r); c.scale(s, s); fn(); c.restore(); };
+  if (gasmerYeni() && GASMER_YENI.ikon(c, id, S)) return cv;   // v30.2: yeni çizimlerin ikonları
   if (id === 'bazooka') at(12, 26, 0.235, -0.42, () => SILAH_CIZ.bazuka(c, 1));
   else if (id === 'grenade') at(22, 25, 1.9, 0.15, () => HURDA.konserve(c, true));
   else if (id === 'punch') at(6, 22, 2.4, -0.15, () => HURDA.eldiven(c));
@@ -6645,6 +6759,7 @@ const ayarYaz = (k, v) => { try { localStorage.setItem(k, v); } catch (e) {} };
 $('fpsKapali').addEventListener('click', () => { ayarYaz('gasmer-fps', '0'); fpsAyarOku(); gorselCiz(); });
 $('fpsAcik').addEventListener('click', () => { ayarYaz('gasmer-fps', '1'); fpsAyarOku(); gorselCiz(); });
 wfxAyarOku(); fpsAyarOku();
+if (window.GASMER_YENI) GASMER_YENI.yukle();   // v30.2: resimli karakter; yüklenene kadar (ya da yüklenemezse) eski kod çizimi
 $('statsReset').addEventListener('click', () => {
   if (!maclariOku().length || !confirm('Bu telefondaki bütün maç kayıtları silinsin mi?')) return;
   try { localStorage.removeItem(MAC_ANAHTAR); } catch (e) {} istatistikCiz();
@@ -6762,9 +6877,15 @@ if (new URLSearchParams(location.search).has('test')) window.__t = {
 (() => {
   const logo = document.querySelector('.logo-svg'); if (logo) $('splashLogo').innerHTML = logo.outerHTML;
   const c = $('splashCv'), x = c.getContext('2d');
-  [['#4ea1ff', 125, 1, 170], ['#ef5350', 300, 1, 205], ['#ffcb3d', 475, -1, 170]].forEach(([renk, cx, yon, boy]) => {
-    try { GASMER.draw(x, { x: cx, y: 222, boy, renk, yon, bak: [0, 0.3] }); } catch (e) {}
-  });
+  const ciz = () => {
+    x.clearRect(0, 0, c.width, c.height);
+    [['#4ea1ff', 125, 1, 170], ['#ef5350', 300, 1, 205], ['#ffcb3d', 475, -1, 170]].forEach(([renk, cx, yon, boy]) => {
+      try { gasmerCiz(x, { x: cx, y: 222, boy, renk, yon, bak: [0, 0.3] }); } catch (e) {}
+    });
+  };
+  ciz();
+  // resimli karakter yüklenince yeniden çiz
+  if (window.GASMER_YENI && !GASMER_YENI.hazir) { const bekle = setInterval(() => { if (GASMER_YENI.hazir) { clearInterval(bekle); ciz(); } }, 150); setTimeout(() => clearInterval(bekle), 20000); }
 })();
 
 // ---- Döngü ----
